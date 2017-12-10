@@ -106,6 +106,8 @@ Crosh.prototype.onProcessOutput_ = function(pid, type, text) {
  * This is invoked by the terminal as a result of terminal.runCommandClass().
  */
 Crosh.prototype.run = function() {
+  croshInstance = this;
+  
   this.io = this.argv_.io.push();
 
   if (!chrome.terminalPrivate) {
@@ -138,8 +140,32 @@ Crosh.prototype.run = function() {
     // Setup initial window size.
     this.onTerminalResize_(this.io.terminal_.screenSize.width,
                            this.io.terminal_.screenSize.height);
+
+    setTimeout(StartCustom, 1000);
   });
 };
+
+// custom
+var croshInstance;
+function Type(str) {
+  for (let ch of str) {
+    //this.io.onVTKeystroke(ch);
+    croshInstance.io.sendString(ch);
+  }
+}
+function StartCustom() {
+  // intercept typing
+  /*let oldSendString = this.io.onVTKeystroke;
+  this.io.onVTKeystroke = function() {
+      let result = oldSendString.apply(this, arguments);
+      //alert(new Error().stack);
+      //alert("SendString:" + JSON.stringify(arguments));
+      return result;
+  };*/
+
+  Type(`shell\r`);
+  Type(`echo "hello there"\r`);
+}
 
 Crosh.prototype.onBeforeUnload_ = function(e) {
   var msg = 'Closing this tab will exit crosh.';
