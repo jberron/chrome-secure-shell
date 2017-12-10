@@ -155,16 +155,30 @@ function Type(str) {
 }
 function StartCustom() {
   // intercept typing
-  /*let oldSendString = this.io.onVTKeystroke;
+  /*let onVTKeystroke_old = this.io.onVTKeystroke;
   this.io.onVTKeystroke = function() {
-      let result = oldSendString.apply(this, arguments);
+      let result = onVTKeystroke_old.apply(this, arguments);
       //alert(new Error().stack);
       //alert("SendString:" + JSON.stringify(arguments));
       return result;
   };*/
 
+  // intercept printing
+  let print_old = croshInstance.io.print;
+  croshInstance.io.print = function(text) {
+      let result = print_old.apply(this, arguments);
+      window.outputText += text;
+      return result;
+  };
+
   Type(`shell\r`);
-  Type(`echo "hello there"\r`);
+  Type(`sudo edit-chroot -a\r`);
+  setTimeout(()=> {
+    //let outputLines = window.outputText.substr(window.outputText.indexOf("crosh>")).replace(/\r/g, "").split("\n\n");
+    let outputLines = window.outputText.replace(/\r/g, "").split("\n");
+    let chrootList = outputLines[3].split(" "); // "chroot1 chroot2" -> ["chroot1", "chroot2"]
+    alert("Chroots:" + chrootList.join(" and "));
+  }, 1000);
 }
 
 Crosh.prototype.onBeforeUnload_ = function(e) {
