@@ -176,9 +176,32 @@ function StartCustom() {
   setTimeout(()=> {
     //let outputLines = window.outputText.substr(window.outputText.indexOf("crosh>")).replace(/\r/g, "").split("\n\n");
     let outputLines = window.outputText.replace(/\r/g, "").split("\n");
-    let chrootList = outputLines[3].split(" "); // "chroot1 chroot2" -> ["chroot1", "chroot2"]
-    alert("Chroots:" + chrootList.join(" and "));
+    let chroots = outputLines[3].split(" "); // "chroot1 chroot2" -> ["chroot1", "chroot2"]
+    RefreshUI(chroots);
   }, 1000);
+}
+
+function RefreshUI(chroots) {
+  var toolbar = document.createElement("div");
+  toolbar.id = "toolbar";
+  toolbar.style.height = "30px";
+  toolbar.style.backgroundColor = "rgba(255,255,255,.3)";
+  document.querySelector("iframe").contentDocument.querySelector("x-screen").prepend(toolbar);
+
+  document.querySelector("iframe").contentDocument.getElementById("hterm:row-nodes").style.top = "36px";
+
+  for (let chroot of chroots) {
+    var button = document.createElement("button");
+    button.innerText = "Start " + chroot;
+    button.onclick = ()=> {
+      //Type("sudo enter-chroot -n " + chroot + "\r");
+      // we don't know what target the chroot has, so just try all three
+      Type("sudo starte17 -n " + chroot + "\r");
+      Type("sudo startkde -n " + chroot + "\r");
+      Type("sudo startxfce4 -n " + chroot + "\r");
+    };
+    toolbar.appendChild(button);
+  }
 }
 
 Crosh.prototype.onBeforeUnload_ = function(e) {
