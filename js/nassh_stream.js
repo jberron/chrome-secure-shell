@@ -26,49 +26,27 @@ nassh.Stream.ERR_STREAM_CLOSED = 'Stream closed';
 nassh.Stream.ERR_STREAM_OPENED = 'Stream opened';
 nassh.Stream.ERR_FD_IN_USE = 'File descriptor in use';
 nassh.Stream.ERR_NOT_IMPLEMENTED = 'Not implemented';
+nassh.Stream.ERR_STREAM_CANT_READ = 'Stream has no read permission';
+nassh.Stream.ERR_STREAM_CANT_WRITE = 'Stream has no write permission';
 
 /**
- * Collection of currently open stream instances.
+ * Convert binary byte array into base64 ascii.
+ *
+ * @param {!Array<!number>} b An array of bytes.
+ * @return {!string} The base64 encoding of the byte array.
  */
-nassh.Stream.openStreams_ = {};
-
-/**
- * Look up a stream instance.
- */
-nassh.Stream.getStreamByFd = function(fd) {
-  return this.openStreams_[fd];
+nassh.Stream.binaryToAscii = function(b) {
+  return btoa(b.map((byte) => String.fromCharCode(byte)).join(''));
 };
 
 /**
- * Open a new stream of a given class.
+ * Convert ascii base64 into binary byte array.
+ *
+ * @param {!string} a A base64-encoded string.
+ * @return {!Array<!number>} The array of byte values encoded in the string.
  */
-nassh.Stream.openStream = function(streamClass, fd, arg, onOpen) {
-  if (fd in this.openStreams_)
-    throw nassh.Stream.ERR_FD_IN_USE;
-
-  var stream = new streamClass(fd, arg);
-  var self = this;
-
-  stream.asyncOpen_(arg, function(success) {
-      if (success) {
-        self.openStreams_[fd] = stream;
-        stream.open = true;
-      }
-
-      onOpen(success);
-    });
-
-  return stream;
-};
-
-/**
- * Clean up after a stream is closed.
- */
-nassh.Stream.onClose_ = function(stream) {
-  if (stream.open)
-    throw nassh.Stream.ERR_STREAM_OPENED;
-
-  delete this.openStreams_[stream.fd_];
+nassh.Stream.asciiToBinary = function(a) {
+  return Array.prototype.map.call(atob(a), (char) => char.charCodeAt(0));
 };
 
 /**
@@ -80,9 +58,16 @@ nassh.Stream.prototype.asyncOpen_ = function(path, onOpen) {
 
 /**
  * Read from a stream, calling back with the result.
+ *
+ * The default implementation does not actually send data to the client, but
+ * assumes that it is instead pushed to the client using the
+ * onDataAvailable event.
  */
 nassh.Stream.prototype.asyncRead = function(size, onRead) {
-  throw nassh.Stream.ERR_NOT_IMPLEMENTED;
+  if (this.onDataAvailable === undefined)
+    throw nassh.Stream.ERR_NOT_IMPLEMENTED;
+
+  setTimeout(() => onRead(''), 0);
 };
 
 /**
@@ -96,15 +81,15 @@ nassh.Stream.prototype.asyncWrite = function(data, onSuccess) {
  * Close a stream.
  */
 nassh.Stream.prototype.close = function(reason) {
-  if (!this.open)
-    return;
-
-  this.open = false;
-
   if (this.onClose)
     this.onClose(reason || 'closed');
+};
 
-  nassh.Stream.onClose_(this);
+/**
+ * Set a new IO for the stream.
+ */
+nassh.Stream.prototype.setIo = function(io) {
+  this.io_ = io;
 };
 
 /**
@@ -116,9 +101,8 @@ nassh.Stream.Random = function(fd) {
   nassh.Stream.apply(this, [fd]);
 };
 
-nassh.Stream.Random.prototype = {
-  __proto__: nassh.Stream.prototype
-};
+nassh.Stream.Random.prototype = Object.create(nassh.Stream.prototype);
+nassh.Stream.Random.constructor = nassh.Stream.Random;
 
 nassh.Stream.Random.prototype.asyncOpen_ = function(path, onOpen) {
   this.path = path;

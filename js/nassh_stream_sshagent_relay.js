@@ -19,9 +19,8 @@ nassh.Stream.SSHAgentRelay = function(fd) {
 /**
  * We are a subclass of nassh.Stream.
  */
-nassh.Stream.SSHAgentRelay.prototype = {
-  __proto__: nassh.Stream.prototype
-};
+nassh.Stream.SSHAgentRelay.prototype = Object.create(nassh.Stream.prototype);
+nassh.Stream.SSHAgentRelay.constructor = nassh.Stream.SSHAgentRelay;
 
 /**
  * Open a connection to agent.
@@ -30,44 +29,41 @@ nassh.Stream.SSHAgentRelay.prototype.asyncOpen_ = function(args, onComplete) {
   this.authAgentAppID_ = args.authAgentAppID;
   this.port_ = chrome.runtime.connect(this.authAgentAppID_);
 
-  var normalOnMessage = function(msg) {
+  var normalOnMessage = (msg) => {
     if (msg.data) {
       // Prepare header.
       var size = msg.data.length;
-      var hdr = [(size >>> 24) & 255,
-                 (size >>> 16) & 255,
-                 (size >>> 8) & 255,
-                 (size >>> 0) & 255];
+      var hdr = lib.array.uint32ToArrayBigEndian(size);
       // Append body.
       var bData = hdr.concat(msg.data);
 
       // Report to client.
-      this.onDataAvailable(this.binaryToAscii(bData));
+      this.onDataAvailable(nassh.Stream.binaryToAscii(bData));
 
       // Re-examine write buffer; there might be more data in it.
       setTimeout(this.trySendPacket_.bind(this), 0);
     }
-  }.bind(this);
+  };
 
-  var normalDisconnect = function() {
+  var normalDisconnect = () => {
     this.port_.onMessage.removeListener(normalOnMessage);
     this.port_.onDisconnect.removeListener(normalDisconnect);
     this.close();
-  }.bind(this);
+  };
 
-  var initialOnMessage = function(msg) {
+  var initialOnMessage = (msg) => {
     this.port_.onMessage.removeListener(initialOnMessage);
     this.port_.onDisconnect.removeListener(initialDisconnect);
     this.port_.onMessage.addListener(normalOnMessage);
     this.port_.onDisconnect.addListener(normalDisconnect);
     onComplete(true);
-  }.bind(this);
+  };
 
-  var initialDisconnect = function() {
+  var initialDisconnect = () => {
     this.port_.onMessage.removeListener(initialOnMessage);
     this.port_.onDisconnect.removeListener(initialDisconnect);
     onComplete(false);
-  }.bind(this);
+  };
 
   this.port_.onMessage.addListener(initialOnMessage);
   this.port_.onDisconnect.addListener(initialDisconnect);
@@ -83,35 +79,14 @@ nassh.Stream.SSHAgentRelay.prototype.close = function(reason) {
 };
 
 /**
- * Convert binary byte array into base64 ascii.
- */
-nassh.Stream.SSHAgentRelay.prototype.binaryToAscii = function(b) {
-  function x(y) { return String.fromCharCode(y); }
-
-  return btoa(Array.prototype.map.call(b, x).join(''));
-};
-
-/**
- * Convert ascii base64 into binary byte array.
- */
-nassh.Stream.SSHAgentRelay.prototype.asciiToBinary = function(a) {
-  function x(y) { return y.charCodeAt(0); }
-
-  return Array.prototype.map.call(atob(a), x);
-};
-
-/**
- * Check whether there is enough data in the write buffer to consitute a packet.
+ * Check whether there is enough data in the write buffer to constitute a packet.
  * If so, send packet and handle reply.
  */
 nassh.Stream.SSHAgentRelay.prototype.trySendPacket_ = function() {
   // Message header, 4 bytes of length.
   if (this.writeBuffer_.length < 4) return;
 
-  var size = ((this.writeBuffer_[0] & 255) << 24) +
-             ((this.writeBuffer_[1] & 255) << 16) +
-             ((this.writeBuffer_[2] & 255) << 8) +
-             ((this.writeBuffer_[3] & 255) << 0);
+  var size = lib.array.arrayBigEndianToUint32(this.writeBuffer_);
 
   // Message body.
   if (this.writeBuffer_.length < 4 + size) return;
@@ -136,20 +111,11 @@ nassh.Stream.SSHAgentRelay.prototype.asyncWrite = function(data, onSuccess) {
   if (!data.length)
     return;
 
-  var bData = this.asciiToBinary(data);
+  var bData = nassh.Stream.asciiToBinary(data);
   this.writeBuffer_ = this.writeBuffer_.concat(bData);
 
   setTimeout(this.trySendPacket_.bind(this), 0);
 
   // Note: report binary length written.
   onSuccess(bData.length);
-};
-
-/**
- * The asyncRead method is a no-op for this class.
- *
- * Instead we push data to the client using the onDataAvailable event.
- */
-nassh.Stream.SSHAgentRelay.prototype.asyncRead = function(size, onRead) {
-  setTimeout(function() { onRead('') }, 0);
 };

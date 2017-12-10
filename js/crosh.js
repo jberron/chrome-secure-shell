@@ -18,7 +18,7 @@ window.onload = function() {
  *
  * This class defines a command that can be run in an hterm.Terminal instance.
  * The Crosh command uses terminalPrivate extension API to create and use crosh
- * process on ChromeOS machine.
+ * process on Chrome OS machine.
  *
  *
  * @param {Object} argv The argument object passed in from the Terminal.
@@ -40,7 +40,7 @@ function Crosh(argv) {
 Crosh.croshBuiltinId = 'nkoccljplnhpfnfiajclkommnmllphnl';
 
 /**
- * Static initialier called from crosh.html.
+ * Static initializer called from crosh.html.
  *
  * This constructs a new Terminal instance and instructs it to run the Crosh
  * command.
@@ -51,34 +51,10 @@ Crosh.init = function() {
 
   terminal.decorate(document.querySelector('#terminal'));
   terminal.onTerminalReady = function() {
-    // We want to override the Ctrl-Shift-N keystroke so it opens nassh.html,
-    // and its connection dialog, rather than reloading crosh.html.
-    //
-    // The builtin version of crosh does not come with nassh, so it won't work
-    // from there.
-    if (chrome.runtime.id != Crosh.croshBuiltinId) {
-      var openSecureShell = function() {
-          window.open('/html/nassh.html', '',
-                      'chrome=no,close=yes,resize=yes,scrollbars=yes,' +
-                      'minimizable=yes,width=' + window.innerWidth +
-                      ',height=' + window.innerHeight);
-          return hterm.Keyboard.KeyActions.CANCEL;
-      };
-
-      terminal.keyboard.keyMap.keyDefs[78].control = function(e) {
-        if (e.shiftKey)
-          return openSecureShell();
-
-        return '\x0e';
-      };
-
-      terminal.keyboard.keyMap.keyDefs[78].meta = function(e) {
-        if (e.shiftKey)
-          return openSecureShell();
-
-        return hterm.Keyboard.KeyActions.DEFAULT;
-      };
-    }
+    terminal.keyboard.bindings.addBinding('Ctrl-Shift-P', function() {
+      nassh.openOptionsPage();
+      return hterm.Keyboard.KeyActions.CANCEL;
+    });
 
     terminal.setCursorPosition(0, 0);
     terminal.setCursorVisible(true);
@@ -89,6 +65,10 @@ Crosh.init = function() {
 
   // Useful for console debugging.
   window.term_ = terminal;
+  console.log(nassh.msg(
+      'CONSOLE_CROSH_OPTIONS_NOTICE',
+      ['Ctrl-Shift-P', lib.f.getURL('/html/nassh_preferences_editor.html')]));
+
   return true;
 };
 
@@ -134,35 +114,31 @@ Crosh.prototype.run = function() {
     return;
   }
 
-  this.io.onVTKeystroke = this.sendString_.bind(this, true /* fromKeyboard */);
-  this.io.sendString = this.sendString_.bind(this, false /* fromKeyboard */);
+  this.io.onVTKeystroke = this.io.sendString = this.sendString_.bind(this);
 
-  var self = this;
   this.io.onTerminalResize = this.onTerminalResize_.bind(this);
   chrome.terminalPrivate.onProcessOutput.addListener(
       this.onProcessOutput_.bind(this));
   document.body.onunload = this.close_.bind(this);
-  chrome.terminalPrivate.openTerminalProcess(this.commandName,
-      function(pid) {
-        if (pid == undefined || pid == -1) {
-          self.io.println("Opening crosh process failed.");
-          self.exit(1);
-          return;
-        }
+  chrome.terminalPrivate.openTerminalProcess(this.commandName, (pid) => {
+    if (pid == undefined || pid == -1) {
+      this.io.println("Opening crosh process failed.");
+      this.exit(1);
+      return;
+    }
 
-        window.onbeforeunload = self.onBeforeUnload_.bind(self);
-        self.pid_ = pid;
+    window.onbeforeunload = this.onBeforeUnload_.bind(this);
+    this.pid_ = pid;
 
-        if (!chrome.terminalPrivate.onTerminalResize) {
-          console.warn("Terminal resizing not supported.");
-          return;
-        }
+    if (!chrome.terminalPrivate.onTerminalResize) {
+      console.warn("Terminal resizing not supported.");
+      return;
+    }
 
-        // Setup initial window size.
-        self.onTerminalResize_(self.io.terminal_.screenSize.width,
-                               self.io.terminal_.screenSize.height);
-      }
-  );
+    // Setup initial window size.
+    this.onTerminalResize_(this.io.terminal_.screenSize.width,
+                           this.io.terminal_.screenSize.height);
+  });
 };
 
 Crosh.prototype.onBeforeUnload_ = function(e) {
@@ -180,32 +156,29 @@ Crosh.prototype.onBeforeUnload_ = function(e) {
  *
  * @private
  *
- * @param {boolean} fromKeyboard Whether the string came from keyboard.
  * @param {string} string A string that may be UTF-8 encoded.
  *
  * @return {string} If decoding is needed, the decoded string, otherwise the
  *     original string.
  */
-Crosh.prototype.decodeUTF8IfNeeded_ = function(fromKeyboard, string) {
-  if (fromKeyboard &&
-      this.keyboard_ && this.keyboard_.characterEncoding == 'utf-8') {
+Crosh.prototype.decodeUTF8IfNeeded_ = function(string) {
+  if (this.keyboard_ && this.keyboard_.characterEncoding == 'utf-8')
     return lib.decodeUTF8(string);
-  }
-  return string;
+  else
+    return string;
 };
 
 /**
  * Send a string to the crosh process.
  *
- * @param {boolean} fromKeyborad Whether the string originates from keyboard.
  * @param {string} string The string to send.
  */
-Crosh.prototype.sendString_ = function(fromKeyboard, string) {
+Crosh.prototype.sendString_ = function(string) {
   if (this.pid_ == -1)
     return;
   chrome.terminalPrivate.sendInput(
       this.pid_,
-      this.decodeUTF8IfNeeded_(fromKeyboard, string));
+      this.decodeUTF8IfNeeded_(string));
 };
 
 /**
@@ -257,7 +230,7 @@ Crosh.prototype.exit = function(code) {
 
   this.io.println('crosh exited with code: ' + code);
   this.io.println('(R)e-execute, (C)hoose another connection, or E(x)it?');
-  this.io.onVTKeystroke = function(string) {
+  this.io.onVTKeystroke = (string) => {
     var ch = string.toLowerCase();
     if (ch == 'r' || ch == ' ' || ch == '\x0d' /* enter */ ||
         ch == '\x12' /* ctrl-r */) {
@@ -276,5 +249,5 @@ Crosh.prototype.exit = function(code) {
       if (this.argv_.onExit)
         this.argv_.onExit(code);
     }
-  }.bind(this);
+  };
 };

@@ -15,29 +15,26 @@ nassh.PreferenceManager = function(opt_storage) {
   var storage = opt_storage || nassh.defaultStorage;
   lib.PreferenceManager.call(this, storage, '/nassh/');
 
-  // Wam enabled by default in "Secure Shell (dev)" only.
-  var enableWam = (chrome.runtime.id == 'okddffdblfhhnmhodogpojmfkjmhinfp');
-
-  this.definePreferences
-  ([
-    // True if we want to listen for "web app messaging" connections from
-    // other apps.
-    ['enable-wam', enableWam],
-
-    // Array of extension ids that are allowed to make wam connections
-    // if wam is enabled.
-    ['wam-whitelist', ['kofmkpnkfdcaogpcodpmlcpfghkkkoda' /* wash tot */,
-                       'heabhofjglopfacdbaligldaibjogffn' /* wash dev */]]
-   ]);
-
   this.defineChildren('profile-ids', function(parent, id) {
     return new nassh.ProfilePreferenceManager(parent, id);
   });
+
+  this.definePreferences([
+    /**
+     * The last version we showed release notes for.
+     */
+    ['welcome/notes-version', ''],
+
+    /**
+     * How many times we've shown the current release notes.
+     */
+    ['welcome/show-count', 0],
+  ]);
 };
 
-nassh.PreferenceManager.prototype = {
-  __proto__: lib.PreferenceManager.prototype
-};
+nassh.PreferenceManager.prototype =
+    Object.create(lib.PreferenceManager.prototype);
+nassh.PreferenceManager.constructor = nassh.PreferenceManager;
 
 nassh.PreferenceManager.prototype.createProfile = function() {
   return this.createChild('profile-ids');
@@ -118,18 +115,23 @@ nassh.ProfilePreferenceManager = function(parent, id) {
     ['terminal-profile', ''],
 
     /**
+     * The base path used when mounting via SFTP.
+     */
+    ['mount-path', ''],
+
+    /**
      * The appid to which to pass auth-agent requests.
      */
     ['auth-agent-appid', null],
    ]);
 };
 
-nassh.ProfilePreferenceManager.prototype = {
-  __proto__: lib.PreferenceManager.prototype
-};
+nassh.ProfilePreferenceManager.prototype =
+    Object.create(lib.PreferenceManager.prototype);
+nassh.ProfilePreferenceManager.constructor = nassh.ProfilePreferenceManager;
 
 nassh.ProfilePreferenceManager.prototype.readStorage = function(opt_callback) {
-  var appendOption = function(str) {
+  var appendOption = (str) => {
     var options = this.get('relay-options');
     if (options) {
       options += ' ' + str;
@@ -138,9 +140,9 @@ nassh.ProfilePreferenceManager.prototype.readStorage = function(opt_callback) {
     }
 
     this.set('relay-option', options);
-  }.bind(this);
+  };
 
-  var onRead = function() {
+  var onRead = () => {
     var host = this.get('relay-host');
     if (host) {
       console.warn('Merging relay-host preference with relay-options');
@@ -157,7 +159,7 @@ nassh.ProfilePreferenceManager.prototype.readStorage = function(opt_callback) {
 
     if (opt_callback)
       opt_callback();
-  }.bind(this);
+  };
 
   lib.PreferenceManager.prototype.readStorage.call(this, onRead);
 };

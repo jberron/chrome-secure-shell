@@ -68,7 +68,7 @@ lib.rtdep('lib.f');
  * 6. Writes are queued up and sent to /write.
  */
 
-nassh.GoogleRelay = function(io, optionString) {
+nassh.GoogleRelay = function(io, optionString, relayLocation, relayStorage) {
   this.io = io;
   this.options = nassh.GoogleRelay.parseOptionString(optionString);
   this.proxyHost = this.options['--proxy-host'];
@@ -77,46 +77,57 @@ nassh.GoogleRelay = function(io, optionString) {
   this.useWebsocket = !this.options['--use-xhr'];
   this.reportAckLatency = this.options['--report-ack-latency'];
   this.reportConnectAttempts = this.options['--report-connect-attempts'];
+  this.relayProtocol = this.options['--relay-protocol'];
   this.relayServer = null;
   this.relayServerSocket = null;
+  this.location = relayLocation;
+  this.storage = relayStorage;
 };
 
 nassh.GoogleRelay.parseOptionString = function(optionString) {
   var rv = {};
 
-  var optionList = optionString.split(/\s+/g);
+  var optionList = optionString.trim().split(/\s+/g);
   for (var i = 0; i < optionList.length; i++) {
-    var option = optionList[i];
-    if (option.substr(0, 1) != '-') {
-      // Bare option overrides --host.
-      rv['--proxy-host'] = option;
+    // Make sure it's a long option first.
+    const option = optionList[i];
+    if (!option.startsWith('--'))
+      throw Error(option);
+
+    // Split apart the option if there is an = in it.
+    let flag, value;
+    const pos = option.indexOf('=');
+    if (pos == -1) {
+      // If there is no = then it's a boolean flag (which --no- disables).
+      value = !option.startsWith('--no-');
+      flag = option.slice(value ? 2 : 5);
     } else {
-      var pos = option.indexOf('=');
-      if (pos != -1) {
-        rv[option.substr(0, pos)] = option.substr(pos + 1);
-      } else {
-        var ary = option.match(/--no-(.*)/);
-        if (ary) {
-          rv['--' + ary[1]] = false;
-        } else {
-          rv[option] = true;
-        }
-      }
+      flag = option.slice(2, pos);
+      value = option.slice(pos + 1);
     }
+
+    // Verify it's an option we support.
+    if (!nassh.GoogleRelay.parseOptionString.validOptions_.includes(flag))
+      throw Error(option);
+
+    rv[`--${flag}`] = value;
   }
 
   if (rv['--config'] == 'google') {
+    rv['auth-agent-forward'] = true;
     if (!('--proxy-host' in rv))
-      rv['--proxy-host'] = 'r.ext.google.com';
+      rv['--proxy-host'] = 'ssh-relay.corp.google.com';
+    if (!('--proxy-port' in rv))
+      rv['--proxy-port'] = '443';
     if (!('--use-ssl' in rv))
       rv['--use-ssl'] = true;
-    if (!('--relay-prefix-field' in rv))
-      rv['--relay-prefix-field'] = '2';
     if (!('--report-ack-latency' in rv))
       rv['--report-ack-latency'] = true;
     if (!('--report-connect-attempts' in rv))
       rv['--report-connect-attempts'] = true;
-    if (!('--default-agent' in rv))
+    if (!('--relay-protocol' in rv))
+      rv['--relay-protocol'] = 'v2';
+    if (!('--ssh-agent' in rv))
       rv['--ssh-agent'] = 'beknehfpfkghjoafdifaflglpjkojoco';
   }
 
@@ -124,11 +135,36 @@ nassh.GoogleRelay.parseOptionString = function(optionString) {
 };
 
 /**
- * The pattern for the cookie server's url.
+ * All possible flags that may show up in the relay options.
+ * Currently this covers all options even non-Google relay ones.
+ *
+ * Note: Keep this in sync with nassh_connect_dialog.html.
  */
-nassh.GoogleRelay.prototype.cookieServerPattern =
-    '%(protocol)://%(host):%(port)/cookie?ext=%encodeURIComponent(return_to)' +
-    '&path=html/nassh_google_relay.html';
+nassh.GoogleRelay.parseOptionString.validOptions_ = [
+  'config',
+  'proxy-host',
+  'proxy-port',
+  'relay-prefix-field',
+  'relay-protocol',
+  'report-ack-latency',
+  'report-connect-attempts',
+  'ssh-agent',
+  'use-ssl',
+  'use-xhr',
+];
+
+/**
+ * Returns the pattern for the cookie server URL.
+ */
+nassh.GoogleRelay.prototype.cookieServerPattern = function() {
+  var template = '%(protocol)://%(host):%(port)/cookie' +
+      '?ext=%encodeURIComponent(return_to)' +
+      '&path=html/nassh_google_relay.html';
+  if (this.relayProtocol == 'v2') {
+    template += '&version=2&method=js-redirect';
+  }
+  return template;
+};
 
 /**
  * The pattern for XHR relay server's url.
@@ -140,21 +176,21 @@ nassh.GoogleRelay.prototype.relayServerPattern =
 
 nassh.GoogleRelay.prototype.redirect = function(opt_resumePath) {
   var resumePath = opt_resumePath ||
-      document.location.href.substr(document.location.origin.length);
+    this.location.href.substr(this.location.origin.length);
 
   // Save off our destination in session storage before we leave for the
   // proxy page.
-  sessionStorage.setItem('googleRelay.resumePath', resumePath);
+  this.storage.setItem('googleRelay.resumePath', resumePath);
 
-  document.location = lib.f.replaceVars(
-      this.cookieServerPattern,
-      { host: this.proxyHost,
-        port: this.proxyPort,
-        protocol: this.useSecure ? 'https' : 'http',
-        // This returns us to nassh_google_relay.html so we can pick the relay
-        // host out of the reply.  From there we continue on to the resumePath.
-        return_to:  document.location.host
-      });
+  this.location.href = lib.f.replaceVars(
+    this.cookieServerPattern(),
+    { host: this.proxyHost,
+      port: this.proxyPort,
+      protocol: this.useSecure ? 'https' : 'http',
+      // This returns us to nassh_google_relay.html so we can pick the relay
+      // host out of the reply.  From there we continue on to the resumePath.
+      return_to:  this.location.host
+    });
 };
 
 /**
@@ -167,13 +203,13 @@ nassh.GoogleRelay.prototype.redirect = function(opt_resumePath) {
  */
 nassh.GoogleRelay.prototype.init = function(opt_resumePath) {
   var resumePath = opt_resumePath ||
-      document.location.href.substr(document.location.origin.length);
+      this.location.href.substr(this.location.origin.length);
 
   // This session storage item is created by /html/nassh_google_relay.html
   // if we succeed at finding a relay host.
-  var relayHost = sessionStorage.getItem('googleRelay.relayHost');
-  var relayPort = sessionStorage.getItem('googleRelay.relayPort') ||
-    (this.useXHR ? 8023 : 8022);
+  var relayHost = this.storage.getItem('googleRelay.relayHost');
+  var relayPort = this.storage.getItem('googleRelay.relayPort') ||
+      this.proxyPort;
 
   if (relayHost) {
     var relayPrefixField = parseInt(this.options['--relay-prefix-field']);
@@ -202,7 +238,7 @@ nassh.GoogleRelay.prototype.init = function(opt_resumePath) {
     }
 
     var expectedResumePath =
-        sessionStorage.getItem('googleRelay.resumePath');
+        this.storage.getItem('googleRelay.resumePath');
     if (expectedResumePath == resumePath) {
       var protocol = this.useSecure ? 'https' : 'http';
       var pattern = this.relayServerPattern;
@@ -213,6 +249,9 @@ nassh.GoogleRelay.prototype.init = function(opt_resumePath) {
         this.relayServerSocket = lib.f.replaceVars(pattern,
             {host: relayHost, port: relayPort, protocol: protocol});
       }
+
+      // If we made it this far, we're probably not stuck in a redirect loop.
+      sessionStorage.removeItem('googleRelay.redirectCount');
     } else {
       // If everything is ok, this should be the second time we've been asked
       // to do the same init.  (The first time would have redirected.)  If this
@@ -224,12 +263,14 @@ nassh.GoogleRelay.prototype.init = function(opt_resumePath) {
     }
   }
 
-  sessionStorage.removeItem('googleRelay.relayHost');
-  sessionStorage.removeItem('googleRelay.relayPort');
-  sessionStorage.removeItem('googleRelay.resumePath');
+  this.storage.removeItem('googleRelay.relayHost');
+  this.storage.removeItem('googleRelay.relayPort');
+  this.storage.removeItem('googleRelay.resumePath');
 
-  if (this.relayServer)
+  if (this.relayServer) {
+    this.io.println(nassh.msg('FOUND_RELAY', [this.relayServer]));
     return true;
+  }
 
   return false;
 };
@@ -238,9 +279,10 @@ nassh.GoogleRelay.prototype.init = function(opt_resumePath) {
  * Return an nassh.Stream object that will handle the socket stream
  * for this relay.
  */
-nassh.GoogleRelay.prototype.openSocket = function(fd, host, port, onOpen) {
+nassh.GoogleRelay.prototype.openSocket = function(fd, host, port, streams,
+                                                  onOpen) {
   var streamClass = this.useWebsocket ? nassh.Stream.GoogleRelayWS :
                                         nassh.Stream.GoogleRelayXHR;
-  return nassh.Stream.openStream(streamClass,
+  return streams.openStream(streamClass,
       fd, {relay: this, host: host, port: port}, onOpen);
 };

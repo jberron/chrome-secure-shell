@@ -39,7 +39,7 @@ nassh.ColumnList.prototype.decorate = function(div) {
 
   var baseId = this.div_.getAttribute('id');
   if (!baseId) {
-    baseId = Math.floor(Math.random() * 0xffff + 1).toString(16);
+    baseId =  lib.f.randomInt(1, 0xffff).toString(16);
     baseId = lib.f.zpad(baseID, 4);
     baseId = 'columnlist-' + baseID;
   }
@@ -54,7 +54,7 @@ nassh.ColumnList.prototype.decorate = function(div) {
  */
 nassh.ColumnList.prototype.focus = function() {
   if (!this.div_)
-    throw 'Not intialized.';
+    throw 'Not initialized.';
 
   this.div_.focus();
 };
@@ -64,7 +64,7 @@ nassh.ColumnList.prototype.focus = function() {
  */
 nassh.ColumnList.prototype.addEventListener = function(var_args) {
   if (!this.div_)
-    throw 'Not intialized.';
+    throw 'Not initialized.';
 
   this.div_.addEventListener.apply(this.div_, arguments);
 };
@@ -78,10 +78,10 @@ nassh.ColumnList.prototype.scheduleRedraw = function() {
   if (this.redrawTimeout_)
     return;
 
-  this.redrawTimeout_ = setTimeout(function() {
-      this.redrawTimeout_ = null;
-      this.redraw();
-    }.bind(this), 100);
+  this.redrawTimeout_ = setTimeout(() => {
+    this.redrawTimeout_ = null;
+    this.redraw();
+  }, 100);
 };
 
 /**

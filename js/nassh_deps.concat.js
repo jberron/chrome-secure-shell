@@ -4,6 +4,8 @@
 // files...
 //
 // libdot/js/lib.js
+// libdot/js/lib_polyfill.js
+// libdot/js/lib_array.js
 // libdot/js/lib_colors.js
 // libdot/js/lib_f.js
 // libdot/js/lib_message_manager.js
@@ -15,12 +17,16 @@
 // libdot/js/lib_storage_memory.js
 // libdot/js/lib_test_manager.js
 // libdot/js/lib_utf8.js
-// libdot/js/lib_wc.js
+// libdot/third_party/wcwidth/lib_wc.js
 // hterm/js/hterm.js
 // hterm/js/hterm_frame.js
 // hterm/js/hterm_keyboard.js
+// hterm/js/hterm_keyboard_bindings.js
 // hterm/js/hterm_keyboard_keymap.js
+// hterm/js/hterm_keyboard_keypattern.js
 // hterm/js/hterm_options.js
+// hterm/js/hterm_parser.js
+// hterm/js/hterm_parser_identifiers.js
 // hterm/js/hterm_preference_manager.js
 // hterm/js/hterm_pubsub.js
 // hterm/js/hterm_screen.js
@@ -30,39 +36,9 @@
 // hterm/js/hterm_text_attributes.js
 // hterm/js/hterm_vt.js
 // hterm/js/hterm_vt_character_map.js
-// wam/js/wam.js
-// wam/js/wam_channel.js
-// wam/js/wam_error_manager.js
-// wam/js/wam_errors.js
-// wam/js/wam_event.js
-// wam/js/wam_transport_chrome_port.js
-// wam/js/wam_transport_direct.js
-// wam/js/wam_in_message.js
-// wam/js/wam_out_message.js
-// wam/js/wam_binding_ready.js
-// wam/js/wam_binding_fs.js
-// wam/js/wam_binding_fs_file_system.js
-// wam/js/wam_binding_fs_execute_context.js
-// wam/js/wam_binding_fs_open_context.js
-// wam/js/wam_remote_ready.js
-// wam/js/wam_remote_fs.js
-// wam/js/wam_remote_fs_handshake.js
-// wam/js/wam_remote_fs_execute.js
-// wam/js/wam_remote_fs_open.js
-// wam/js/wam_jsfs.js
-// wam/js/wam_jsfs_file_system.js
-// wam/js/wam_jsfs_entry.js
-// wam/js/wam_jsfs_remote_file_system.js
-// wam/js/wam_jsfs_directory.js
-// wam/js/wam_jsfs_execute_context.js
-// wam/js/wam_jsfs_open_context.js
-// wam/js/wam_jsfs_executable.js
-// wam/js/wam_jsfs_dom.js
-// wam/js/wam_jsfs_dom_file_system.js
-// wam/js/wam_jsfs_dom_open_context.js
 // libdot/js/lib_event.js
 // libdot/js/lib_fs.js
-// libdot/js/lib_f_sequence.js
+// libdot/third_party/punycode/lib_punycode.js
 //
 
 // SOURCE FILE: libdot/js/lib.js
@@ -81,7 +57,7 @@ var lib = {};
  * Map of "dependency" to ["source", ...].
  *
  * Each dependency is a object name, like "lib.fs", "source" is the url that
- * depdends on the object.
+ * depends on the object.
  */
 lib.runtimeDependencies_ = {};
 
@@ -226,6 +202,167 @@ lib.init = function(onInit, opt_logFunction) {
 
   setTimeout(initNext, 0);
 };
+// SOURCE FILE: libdot/js/lib_polyfill.js
+// Copyright 2017 The Chromium OS Authors. All rights reserved.
+// Use of this source code is governed by a BSD-style license that can be
+// found in the LICENSE file.
+
+'use strict';
+
+/**
+ * @fileoverview Polyfills for ES2016+ features we want to use.
+ */
+
+// https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/String/padStart
+if (!String.prototype.padStart) {
+  String.prototype.padStart = function(targetLength, padString) {
+    // If the string is already long enough, nothing to do!
+    targetLength -= this.length;
+    if (targetLength <= 0)
+      return String(this);
+
+    if (padString === undefined)
+      padString = ' ';
+
+    // In case the pad is multiple chars long.
+    if (targetLength > padString.length)
+      padString = padString.repeat((targetLength / padString.length) + 1);
+
+    return padString.slice(0, targetLength) + String(this);
+  };
+}
+
+// https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/String/padEnd
+if (!String.prototype.padEnd) {
+  String.prototype.padEnd = function(targetLength, padString) {
+    // If the string is already long enough, nothing to do!
+    targetLength -= this.length;
+    if (targetLength <= 0)
+      return String(this);
+
+    if (padString === undefined)
+      padString = ' ';
+
+    // In case the pad is multiple chars long.
+    if (targetLength > padString.length)
+      padString = padString.repeat((targetLength / padString.length) + 1);
+
+    return String(this) + padString.slice(0, targetLength);
+  };
+}
+
+// https://developer.mozilla.org/en/docs/Web/JavaScript/Reference/Global_objects/Object/values
+// https://github.com/tc39/proposal-object-values-entries/blob/master/polyfill.js
+if (!Object.values || !Object.entries) {
+  const reduce = Function.bind.call(Function.call, Array.prototype.reduce);
+  const isEnumerable = Function.bind.call(Function.call,
+      Object.prototype.propertyIsEnumerable);
+  const concat = Function.bind.call(Function.call, Array.prototype.concat);
+
+  if (!Object.values) {
+    Object.values = function values(O) {
+      return reduce(Reflect.ownKeys(O), (v, k) => concat(v,
+          typeof k === 'string' && isEnumerable(O, k) ? [O[k]] : []), []);
+    };
+  }
+
+  if (!Object.entries) {
+    Object.entries = function entries(O) {
+      return reduce(Reflect.ownKeys(O), (e, k) => concat(e,
+          typeof k === 'string' && isEnumerable(O, k) ? [[k, O[k]]] : []), []);
+    };
+  }
+}
+// SOURCE FILE: libdot/js/lib_array.js
+// Copyright 2017 The Chromium OS Authors. All rights reserved.
+// Use of this source code is governed by a BSD-style license that can be
+// found in the LICENSE file.
+
+'use strict';
+
+/**
+ * @fileoverview Helper functions for (typed) arrays.
+ */
+
+lib.array = {};
+
+/**
+ * Convert an array of four unsigned bytes into an unsigned 32-bit integer (big
+ * endian).
+ *
+ * @param {!Array.<!number>} array
+ * @returns {!number}
+ */
+lib.array.arrayBigEndianToUint32 = function(array) {
+  const maybeSigned =
+      (array[0] << 24) | (array[1] << 16) | (array[2] << 8) | (array[3] << 0);
+  // Interpret the result of the bit operations as an unsigned integer.
+  return maybeSigned >>> 0;
+};
+
+/**
+ * Convert an unsigned 32-bit integer into an array of four unsigned bytes (big
+ * endian).
+ *
+ * @param {!number} uint32
+ * @returns {!Array.<!number>}
+ */
+lib.array.uint32ToArrayBigEndian = function(uint32) {
+  return [
+    (uint32 >>> 24) & 0xFF,
+    (uint32 >>> 16) & 0xFF,
+    (uint32 >>> 8) & 0xFF,
+    (uint32 >>> 0) & 0xFF,
+  ];
+};
+
+/**
+ * Concatenate an arbitrary number of typed arrays of the same type into a new
+ * typed array of this type.
+ *
+ * @template TYPED_ARRAY
+ * @param {...!TYPED_ARRAY} arrays
+ * @returns {!TYPED_ARRAY}
+ */
+lib.array.concatTyped = function(...arrays) {
+  let resultLength = 0;
+  for (const array of arrays) {
+    resultLength += array.length;
+  }
+  const result = new arrays[0].constructor(resultLength);
+  let pos = 0;
+  for (const array of arrays) {
+    result.set(array, pos);
+    pos += array.length;
+  }
+  return result;
+};
+
+/**
+ * Compare two array-like objects entrywise.
+ *
+ * @template ARRAY_LIKE
+ * @param {?ARRAY_LIKE} a
+ * @param {?ARRAY_LIKE} b
+ * @returns {!boolean} true if both arrays are null or they agree entrywise;
+ *     false otherwise.
+ */
+lib.array.compare = function(a, b) {
+  if (a === null || b === null) {
+    return a === null && b === null;
+  }
+
+  if (a.length !== b.length) {
+    return false;
+  }
+
+  for (let i = 0; i < a.length; i++) {
+    if (a[i] !== b[i]) {
+      return false;
+    }
+  }
+  return true;
+};
 // SOURCE FILE: libdot/js/lib_colors.js
 // Copyright (c) 2012 The Chromium OS Authors. All rights reserved.
 // Use of this source code is governed by a BSD-style license that can be
@@ -287,7 +424,7 @@ lib.colors.re_ = {
        '(?:,/s*(/d+(?:/./d+)?)/s*)?/)/s*$'
        ).replace(/\//g, '\\'), 'i'),
 
-  // An X11 "rgb:ddd/ddd/ddd" value.
+  // An X11 "rgb:dddd/dddd/dddd" value.
   x11rgb: /^\s*rgb:([a-f0-9]{1,4})\/([a-f0-9]{1,4})\/([a-f0-9]{1,4})\s*$/i,
 
   // English color name.
@@ -308,10 +445,7 @@ lib.colors.re_ = {
 lib.colors.rgbToX11 = function(value) {
   function scale(v) {
     v = (Math.min(v, 255) * 257).toString(16);
-    while (v.length < 4)
-      v = '0' + v;
-
-    return v;
+    return lib.f.zpad(v, 4);
   }
 
   var ary = value.match(lib.colors.re_.rgbx);
@@ -319,6 +453,48 @@ lib.colors.rgbToX11 = function(value) {
     return null;
 
   return 'rgb:' + scale(ary[1]) + '/' + scale(ary[2]) + '/' + scale(ary[3]);
+};
+
+/**
+ * Convert a legacy X11 colover value into an CSS rgb(...) color value.
+ *
+ * They take the form:
+ * 12 bit: #RGB          -> #R000G000B000
+ * 24 bit: #RRGGBB       -> #RR00GG00BB00
+ * 36 bit: #RRRGGGBBB    -> #RRR0GGG0BBB0
+ * 48 bit: #RRRRGGGGBBBB
+ * These are the most significant bits.
+ *
+ * Truncate values back down to 24 bit since that's all CSS supports.
+ */
+lib.colors.x11HexToCSS = function(v) {
+  if (!v.startsWith('#'))
+    return null;
+  // Strip the leading # off.
+  v = v.substr(1);
+
+  // Reject unknown sizes.
+  if ([3, 6, 9, 12].indexOf(v.length) == -1)
+    return null;
+
+  // Reject non-hex values.
+  if (v.match(/[^a-f0-9]/i))
+    return null;
+
+  // Split the colors out.
+  var size = v.length / 3;
+  var r = v.substr(0, size);
+  var g = v.substr(size, size);
+  var b = v.substr(size + size, size);
+
+  // Normalize to 16 bits.
+  function norm16(v) {
+    v = parseInt(v, 16);
+    return size == 2 ? v :         // 16 bit
+           size == 1 ? v << 4 :    // 8 bit
+           v >> (4 * (size - 2));  // 24 or 32 bit
+  }
+  return lib.colors.arrayToRGBA([r, g, b].map(norm16));
 };
 
 /**
@@ -337,7 +513,7 @@ lib.colors.x11ToCSS = function(v) {
     // Pad out values with less than four digits.  This padding (probably)
     // matches xterm.  It's difficult to say for sure since xterm seems to
     // arrive at a padded value and then perform some combination of
-    // gamma correction, color space tranformation, and quantization.
+    // gamma correction, color space transformation, and quantization.
 
     if (v.length == 1) {
       // Single digits pad out to four by repeating the character.  "f" becomes
@@ -365,8 +541,13 @@ lib.colors.x11ToCSS = function(v) {
   }
 
   var ary = v.match(lib.colors.re_.x11rgb);
-  if (!ary)
-    return lib.colors.nameToRGB(v);
+  if (!ary) {
+    // Handle the legacy format.
+    if (v.startsWith('#'))
+      return lib.colors.x11HexToCSS(v);
+    else
+      return lib.colors.nameToRGB(v);
+  }
 
   ary.splice(0, 1);
   return lib.colors.arrayToRGBA(ary.map(scale));
@@ -384,10 +565,16 @@ lib.colors.x11ToCSS = function(v) {
  * @return {string|Array.<string>} The converted value or values.
  */
 lib.colors.hexToRGB = function(arg) {
+  var hex16 = lib.colors.re_.hex16;
+  var hex24 = lib.colors.re_.hex24;
+
   function convert(hex) {
-    var re = (hex.length == 4) ?
-        lib.colors.re_.hex16 : lib.colors.re_.hex24;
-    var ary = hex.match(re)
+    if (hex.length == 4) {
+      hex = hex.replace(hex16, function(h, r, g, b) {
+        return "#" + r + r + g + g + b + b;
+      });
+    }
+    var ary = hex.match(hex24);
     if (!ary)
       return null;
 
@@ -422,9 +609,11 @@ lib.colors.hexToRGB = function(arg) {
 lib.colors.rgbToHex = function(arg) {
   function convert(rgb) {
     var ary = lib.colors.crackRGB(rgb);
-    return '#' + ((parseInt(ary[0]) << 16) |
-                  (parseInt(ary[1]) <<  8) |
-                  (parseInt(ary[2]) <<  0)).toString(16);
+    if (!ary)
+      return null;
+    return '#' + lib.f.zpad(((parseInt(ary[0]) << 16) |
+                             (parseInt(ary[1]) <<  8) |
+                             (parseInt(ary[2]) <<  0)).toString(16), 6);
   }
 
   if (arg instanceof Array) {
@@ -444,7 +633,7 @@ lib.colors.rgbToHex = function(arg) {
  * Returns null if the value could not be normalized.
  */
 lib.colors.normalizeCSS = function(def) {
-  if (def.substr(0, 1) == '#')
+  if (def.startsWith('#'))
     return lib.colors.hexToRGB(def);
 
   if (lib.colors.re_.rgbx.test(def))
@@ -478,8 +667,8 @@ lib.colors.mix = function(base, tint, percent) {
   var ary2 = lib.colors.crackRGB(tint);
 
   for (var i = 0; i < 4; ++i) {
-    var diff = ary1[i] - ary2[i];
-    ary1[i] += diff * percent;
+    var diff = ary2[i] - ary1[i];
+    ary1[i] = Math.round(parseInt(ary1[i]) + diff * percent);
   }
 
   return lib.colors.arrayToRGBA(ary1);
@@ -492,7 +681,7 @@ lib.colors.mix = function(base, tint, percent) {
  * will be set to 1.
  */
 lib.colors.crackRGB = function(color) {
-  if (color.substr(0, 4) == 'rgba') {
+  if (color.startsWith('rgba')) {
     var ary = color.match(lib.colors.re_.rgba);
     if (ary) {
       ary.shift();
@@ -502,7 +691,7 @@ lib.colors.crackRGB = function(color) {
     var ary = color.match(lib.colors.re_.rgb);
     if (ary) {
       ary.shift();
-      ary.push(1);
+      ary.push('1');
       return ary;
     }
   }
@@ -1279,6 +1468,20 @@ lib.colors.colorNames = {
 lib.f = {};
 
 /**
+ * Create a unique enum value.
+ *
+ * @suppress {lintChecks}
+ * @param {string} name A human friendly name for debugging.
+ * @return {Object} A unique enum that won't compare equal to anything else.
+ */
+lib.f.createEnum = function(name) {
+  // We use a String object as nothing else should be using them -- we want to
+  // use string primitives normally.  But debuggers will include our name.
+  // eslint-disable-next-line no-new-wrappers
+  return new String(name);
+};
+
+/**
  * Replace variable references in a string.
  *
  * Variables are of the form %FUNCTION(VARNAME).  FUNCTION is an optional
@@ -1325,7 +1528,7 @@ lib.f.replaceVars.functions = {
       "'": '&#39;'
     };
 
-    return str.replace(/[<>&\"\']/g, function(m) { return map[m] });
+    return str.replace(/[<>&\"\']/g, (m) => map[m]);
   }
 };
 
@@ -1336,13 +1539,17 @@ lib.f.replaceVars.functions = {
  *     parameter is a list of locale names.
  */
 lib.f.getAcceptLanguages = function(callback) {
-  if (window.chrome && chrome.i18n) {
+  if (lib.f.getAcceptLanguages.chromeSupported()) {
     chrome.i18n.getAcceptLanguages(callback);
   } else {
     setTimeout(function() {
         callback([navigator.language.replace(/-/g, '_')]);
       }, 0);
   }
+};
+
+lib.f.getAcceptLanguages.chromeSupported = function() {
+  return window.chrome && chrome.i18n;
 };
 
 /**
@@ -1360,7 +1567,7 @@ lib.f.getAcceptLanguages = function(callback) {
  *     leading '?', the '?' will be ignored.
  */
 lib.f.parseQuery = function(queryString) {
-  if (queryString.substr(0, 1) == '?')
+  if (queryString.startsWith('?'))
     queryString = queryString.substr(1);
 
   var rv = {};
@@ -1375,10 +1582,14 @@ lib.f.parseQuery = function(queryString) {
 };
 
 lib.f.getURL = function(path) {
-  if (window.chrome && chrome.runtime && chrome.runtime.getURL)
+  if (lib.f.getURL.chromeSupported())
     return chrome.runtime.getURL(path);
 
   return path;
+};
+
+lib.f.getURL.chromeSupported = function() {
+  return window.chrome && chrome.runtime && chrome.runtime.getURL;
 };
 
 /**
@@ -1397,24 +1608,6 @@ lib.f.clamp = function(v, min, max) {
 };
 
 /**
- * Left pad a string to a given length using a given character.
- *
- * @param {string} str The string to pad.
- * @param {integer} length The desired length.
- * @param {string} opt_ch The optional padding character, defaults to ' '.
- * @return {string} The padded string.
- */
-lib.f.lpad = function(str, length, opt_ch) {
-  str = String(str);
-  opt_ch = opt_ch || ' ';
-
-  while (str.length < length)
-    str = opt_ch + str;
-
-  return str;
-};
-
-/**
  * Left pad a number to a given length with leading zeros.
  *
  * @param {string|integer} number The number to pad.
@@ -1422,7 +1615,7 @@ lib.f.lpad = function(str, length, opt_ch) {
  * @return {string} The padded number as a string.
  */
 lib.f.zpad = function(number, length) {
-  return lib.f.lpad(number, length, '0');
+  return String(number).padStart(length, '0');
 };
 
 /**
@@ -1436,7 +1629,7 @@ lib.f.zpad = function(number, length) {
  * @param {string} A string of spaces of the requested length.
  */
 lib.f.getWhitespace = function(length) {
-  if (length == 0)
+  if (length <= 0)
     return '';
 
   var f = this.getWhitespace;
@@ -1505,7 +1698,7 @@ lib.f.alarm = function(callback, opt_ms) {
         }
 
         return callback.apply(null, arguments);
-      }
+      };
     };
 
     if (typeof callback == 'string')
@@ -1551,6 +1744,38 @@ lib.f.getStack = function(opt_ignoreFrames) {
 
   return stackObject;
 };
+
+/**
+ * Divides the two numbers and floors the results, unless the remainder is less
+ * than an incredibly small value, in which case it returns the ceiling.
+ * This is useful when the number are truncated approximations of longer
+ * values, and so doing division with these numbers yields a result incredibly
+ * close to a whole number.
+ *
+ * @param {number} numerator
+ * @param {number} denominator
+ * @return {number}
+ */
+lib.f.smartFloorDivide = function(numerator,  denominator) {
+  var val = numerator / denominator;
+  var ceiling = Math.ceil(val);
+  if (ceiling - val < .0001) {
+    return ceiling;
+  } else {
+    return Math.floor(val);
+  }
+};
+
+/**
+ * Get a random integer in a range (inclusive).
+ *
+ * @param {number} min The lowest integer in the range.
+ * @param {number} max The highest integer in the range.
+ * @return {number} A random number between min & max.
+ */
+lib.f.randomInt = function(min, max) {
+  return Math.floor(Math.random() * (max - min + 1)) + min;
+};
 // SOURCE FILE: libdot/js/lib_message_manager.js
 // Copyright (c) 2012 The Chromium OS Authors. All rights reserved.
 // Use of this source code is governed by a BSD-style license that can be
@@ -1563,7 +1788,7 @@ lib.f.getStack = function(opt_ignoreFrames) {
  *
  * Note: chrome.i18n isn't sufficient because...
  *     1. There's a bug in chrome that makes it unavailable in iframes:
- *        http://crbug.com/130200
+ *        https://crbug.com/130200
  *     2. The client code may not be packaged in a Chrome extension.
  *     3. The client code may be part of a library packaged in a third-party
  *        Chrome extension.
@@ -1573,8 +1798,7 @@ lib.f.getStack = function(opt_ignoreFrames) {
  *     automatically added as the first language if it is not already present.
  */
 lib.MessageManager = function(languages) {
-  this.languages_ = languages.map(
-      function(el) { return el.replace(/-/g, '_') });
+  this.languages_ = languages.map((el) => el.replace(/-/g, '_'));
 
   if (this.languages_.indexOf('en') == -1)
     this.languages_.unshift('en');
@@ -1586,7 +1810,7 @@ lib.MessageManager = function(languages) {
  * Add message definitions to the message manager.
  *
  * This takes an object of the same format of a Chrome messages.json file.  See
- * <http://code.google.com/chrome/extensions/i18n-messages.html>.
+ * <https://developer.chrome.com/extensions/i18n-messages>.
  */
 lib.MessageManager.prototype.addMessages = function(defs) {
   for (var key in defs) {
@@ -1700,7 +1924,7 @@ lib.MessageManager.prototype.get = function(msgname, opt_args, opt_default) {
     message = this.messages[msgname];
 
   } else {
-    if (window.chrome.i18n)
+    if (window.chrome && window.chrome.i18n)
       message = chrome.i18n.getMessage(msgname);
 
     if (!message) {
@@ -1721,10 +1945,22 @@ lib.MessageManager.prototype.get = function(msgname, opt_args, opt_default) {
 /**
  * Process all of the "i18n" html attributes found in a given dom fragment.
  *
- * Each i18n attribute should contain a JSON object.  The keys are taken to
+ * The real work happens in processI18nAttribute.
+ */
+lib.MessageManager.prototype.processI18nAttributes = function(dom) {
+  var nodes = dom.querySelectorAll('[i18n]');
+
+  for (var i = 0; i < nodes.length; i++)
+    this.processI18nAttribute(nodes[i]);
+};
+
+/**
+ * Process the "i18n" attribute in the specified node.
+ *
+ * The i18n attribute should contain a JSON object.  The keys are taken to
  * be attribute names, and the values are message names.
  *
- * If the JSON object has a "_" (underscore) key, it's value is used as the
+ * If the JSON object has a "_" (underscore) key, its value is used as the
  * textContent of the element.
  *
  * Message names can refer to other attributes on the same element with by
@@ -1738,40 +1974,44 @@ lib.MessageManager.prototype.get = function(msgname, opt_args, opt_default) {
  * Notice that the "id" attribute was appended to the target attribute, and
  * the result converted to UPPER_AND_UNDER style.
  */
-lib.MessageManager.prototype.processI18nAttributes = function(dom) {
+lib.MessageManager.prototype.processI18nAttribute = function(node) {
   // Convert the "lower-and-dashes" attribute names into
   // "UPPER_AND_UNDER" style.
-  function thunk(str) { return str.replace(/-/g, '_').toUpperCase() }
+  const thunk = (str) => str.replace(/-/g, '_').toUpperCase();
 
-  var nodes = dom.querySelectorAll('[i18n]');
+  var i18n = node.getAttribute('i18n');
+  if (!i18n)
+    return;
 
-  for (var i = 0; i < nodes.length; i++) {
-    var node = nodes[i];
-    var i18n = node.getAttribute('i18n');
+  try {
+    i18n = JSON.parse(i18n);
+  } catch (ex) {
+    console.error('Can\'t parse ' + node.tagName + '#' + node.id + ': ' + i18n);
+    throw ex;
+  }
 
-    if (!i18n)
-      continue;
+  // Load all the messages specified in the i18n attributes.
+  for (var key in i18n) {
+    // The node attribute we'll be setting.
+    var attr = key;
 
-    try {
-      i18n = JSON.parse(i18n);
-    } catch (ex) {
-      console.error('Can\'t parse ' + node.tagName + '#' + node.id + ': ' +
-                    i18n);
-      throw ex;
+    var msgname = i18n[key];
+    // For "=foo", re-use the referenced message name.
+    if (msgname.startsWith('=')) {
+      key = msgname.substr(1);
+      msgname = i18n[key];
     }
 
-    for (var key in i18n) {
-      var msgname = i18n[key];
-      if (msgname.substr(0, 1) == '$')
-        msgname = thunk(node.getAttribute(msgname.substr(1)) + '_' + key);
+    // For "$foo", calculate the message name.
+    if (msgname.startsWith('$'))
+      msgname = thunk(node.getAttribute(msgname.substr(1)) + '_' + key);
 
-      var msg = this.get(msgname);
-      if (key == '_') {
-        node.textContent = msg;
-      } else {
-        node.setAttribute(key, msg);
-      }
-    }
+    // Finally load the message.
+    var msg = this.get(msgname);
+    if (attr == '_')
+      node.textContent = msg;
+    else
+      node.setAttribute(attr, msg);
   }
 };
 // SOURCE FILE: libdot/js/lib_preference_manager.js
@@ -1795,7 +2035,7 @@ lib.MessageManager.prototype.processI18nAttributes = function(dom) {
  * @param {lib.Storage.*} storage The storage object to use as a backing
  *     store.
  * @param {string} opt_prefix The optional prefix to be used for all preference
- *     names.  The '/' character should be used to separate levels of heirarchy,
+ *     names.  The '/' character should be used to separate levels of hierarchy,
  *     if you're going to have that kind of thing.  If provided, the prefix
  *     should start with a '/'.  If not provided, it defaults to '/'.
  */
@@ -1809,7 +2049,7 @@ lib.PreferenceManager = function(storage, opt_prefix) {
   this.trace = false;
 
   var prefix = opt_prefix || '/';
-  if (prefix.substr(prefix.length - 1) != '/')
+  if (!prefix.endsWith('/'))
     prefix += '/';
 
   this.prefix = prefix;
@@ -1842,12 +2082,12 @@ lib.PreferenceManager = function(storage, opt_prefix) {
  *
  * Equality tests against this value MUST use '===' or '!==' to be accurate.
  */
-lib.PreferenceManager.prototype.DEFAULT_VALUE = new String('DEFAULT');
+lib.PreferenceManager.prototype.DEFAULT_VALUE = lib.f.createEnum('DEFAULT');
 
 /**
  * An individual preference.
  *
- * These objects are managed by the PreferenceManager, you shoudn't need to
+ * These objects are managed by the PreferenceManager, you shouldn't need to
  * handle them directly.
  */
 lib.PreferenceManager.Record = function(name, defaultValue) {
@@ -1958,8 +2198,7 @@ lib.PreferenceManager.prototype.readStorage = function(opt_callback) {
       opt_callback();
   }
 
-  var keys = Object.keys(this.prefRecords_).map(
-      function(el) { return this.prefix + el }.bind(this));
+  var keys = Object.keys(this.prefRecords_).map((el) => this.prefix + el);
 
   if (this.trace)
     console.log('Preferences read: ' + this.prefix);
@@ -2044,7 +2283,7 @@ lib.PreferenceManager.prototype.definePreferences = function(defaults) {
  *     child ids.  It is also used in get/add/remove operations to identify the
  *     list of children to operate on.
  * @param {function} childFactory A function that will be used to generate
- *     instances of these childred.  The factory function will receive the
+ *     instances of these children.  The factory function will receive the
  *     parent lib.PreferenceManager object and a unique id for the new child
  *     preferences.
  */
@@ -2143,7 +2382,7 @@ lib.PreferenceManager.prototype.createChild = function(listName, opt_hint,
   } else {
     // Pick a random, unique 4-digit hex identifier for the new profile.
     while (!id || ids.indexOf(id) != -1) {
-      id = Math.floor(Math.random() * 0xffff + 1).toString(16);
+      id = lib.f.randomInt(1, 0xffff).toString(16);
       id = lib.f.zpad(id, 4);
       if (opt_hint)
         id = opt_hint + ':' + id;
@@ -2485,7 +2724,7 @@ lib.PreferenceManager.prototype.get = function(name) {
 };
 
 /**
- * Return all non-default preferences as a JSON onject.
+ * Return all non-default preferences as a JSON object.
  *
  * This includes any nested preference managers as well.
  */
@@ -2516,7 +2755,13 @@ lib.PreferenceManager.prototype.exportAsJson = function() {
  *
  * This will create nested preference managers as well.
  */
-lib.PreferenceManager.prototype.importFromJson = function(json) {
+lib.PreferenceManager.prototype.importFromJson = function(json, opt_onComplete) {
+  let pendingWrites = 0;
+  const onWriteStorage = () => {
+    if (--pendingWrites < 1 && opt_onComplete)
+      opt_onComplete();
+  };
+
   for (var name in json) {
     if (name in this.childLists_) {
       var childList = json[name];
@@ -2527,11 +2772,13 @@ lib.PreferenceManager.prototype.importFromJson = function(json) {
         if (!childPrefManager)
           childPrefManager = this.createChild(name, null, id);
 
-        childPrefManager.importFromJson(childList[i].json);
+        childPrefManager.importFromJson(childList[i].json, onWriteStorage);
+        pendingWrites++;
       }
 
     } else {
-      this.set(name, json[name]);
+      this.set(name, json[name], onWriteStorage);
+      pendingWrites++;
     }
   }
 };
@@ -2568,7 +2815,7 @@ lib.PreferenceManager.prototype.onStorageChange_ = function(map) {
       currentValue = (void 0);
 
     if (this.diff(currentValue, newValue)) {
-      if (typeof newValue == 'undefined') {
+      if (typeof newValue == 'undefined' || newValue === null) {
         record.currentValue = record.DEFAULT_VALUE;
       } else {
         record.currentValue = newValue;
@@ -2778,9 +3025,27 @@ lib.Storage.Chrome.prototype.getItems = function(keys, callback) {
  *     to read the value, since the local cache is updated synchronously.
  */
 lib.Storage.Chrome.prototype.setItem = function(key, value, opt_callback) {
+  const onComplete = () => {
+    if (chrome.runtime.lastError) {
+      // Doesn't seem to be any better way of handling this.
+      // https://crbug.com/764759
+      if (chrome.runtime.lastError.message.indexOf('MAX_WRITE_OPERATIONS')) {
+        console.warn(`Will retry save of ${key} after exceeding quota`,
+                     chrome.runtime.lastError);
+        setTimeout(() => this.setItem(key, value, onComplete), 1000);
+        return;
+      } else {
+        console.error('Unknown runtime error', chrome.runtime.lastError);
+      }
+    }
+
+    if (opt_callback)
+      opt_callback();
+  };
+
   var obj = {};
   obj[key] = value;
-  this.storage_.set(obj, opt_callback);
+  this.storage_.set(obj, onComplete);
 };
 
 /**
@@ -2842,9 +3107,11 @@ lib.Storage.Local.prototype.onStorage_ = function(e) {
   if (e.storageArea != this.storage_)
     return;
 
-  // IE throws an exception if JSON.parse is given an empty string.
-  var prevValue = e.oldValue ? JSON.parse(e.oldValue) : "";
-  var curValue = e.newValue ? JSON.parse(e.newValue) : "";
+  // JS throws an exception if JSON.parse is given an empty string. So here we
+  // only parse if the value is truthy. This mean the empty string, undefined
+  // and null will not be parsed.
+  var prevValue = e.oldValue ? JSON.parse(e.oldValue) : e.oldValue;
+  var curValue = e.newValue ? JSON.parse(e.newValue) : e.newValue;
   var o = {};
   o[e.key] = {
     oldValue: prevValue,
@@ -3225,14 +3492,14 @@ lib.Storage.Memory.prototype.removeItems = function(ary, opt_callback) {
  */
 
 /**
- * Root object in the unit test heirarchy, and keeper of the log object.
+ * Root object in the unit test hierarchy, and keeper of the log object.
  *
  * @param {lib.TestManager.Log} opt_log Optional lib.TestManager.Log object.
- *     Logs to the JavaScript console if ommitted.
+ *     Logs to the JavaScript console if omitted.
  */
 lib.TestManager = function(opt_log) {
   this.log = opt_log || new lib.TestManager.Log();
-}
+};
 
 /**
  * Create a new test run object for this test manager.
@@ -3254,85 +3521,76 @@ lib.TestManager.prototype.createTestRun = function(opt_cx) {
 lib.TestManager.prototype.onTestRunComplete = function(testRun) {};
 
 /**
+ * Called before a test associated with this test manager is run.
+ *
+ * @param {lib.TestManager.Result} result The result object for the upcoming
+ *     test.
+ * @param {Object} cx The context object for a test run.
+ */
+lib.TestManager.prototype.testPreamble = function(result, cx) {};
+
+/**
+ * Called after a test associated with this test manager finishes.
+ *
+ * @param {lib.TestManager.Result} result The result object for the finished
+ *     test.
+ * @param {Object} cx The context object for a test run.
+ */
+lib.TestManager.prototype.testPostamble = function(result, cx) {};
+
+/**
  * Destination for test case output.
  *
- * @param {function(string)} opt_logFunction Optional function to call to
- *     write a string to the log.  If ommitted, console.log is used.
+ * Thw API will be the same as the console object.  e.g. We support info(),
+ * warn(), error(), etc... just like console.info(), etc...
+ *
+ * @param {Object} opt_console The console object to route all logging through.
+ *     Should provide saome API as the standard console API.
  */
-lib.TestManager.Log = function(opt_logFunction) {
-  this.logFunction_ = opt_logFunction || function(s) { console.log(s) };
-  this.pending_ = '';
+lib.TestManager.Log = function(opt_console=console) {
+  this.save = false;
+  this.data = '';
   this.prefix_ = '';
-  this.prefixStack_ = [];
-};
+  this.prefixStack_ = 0;
 
-/**
- * Add a prefix to log messages.
- *
- * This only affects log messages that are added after the prefix is pushed.
- *
- * @param {string} str The prefix to prepend to future log messages.
- */
-lib.TestManager.Log.prototype.pushPrefix = function(str) {
-  this.prefixStack_.push(str);
-  this.prefix_ = this.prefixStack_.join('');
-};
+  // Capture all the console entry points in case code at runtime calls these
+  // directly.  We want to be able to still see things.
+  // We also expose the direct API to our callers (e.g. we provide warn()).
+  this.console_ = opt_console;
+  ['log', 'debug', 'info', 'warn', 'error'].forEach((level) => {
+    let msgPrefix = '';
+    switch (level) {
+      case 'debug':
+      case 'warn':
+      case 'error':
+        msgPrefix = level.toUpperCase() + ': ';
+        break;
+    }
 
-/**
- * Remove the most recently added message prefix.
- */
-lib.TestManager.Log.prototype.popPrefix = function() {
-  this.prefixStack_.pop();
-  this.prefix_ = this.prefixStack_.join('');
-};
+    const oLog = this.console_[level];
+    this[level] = this.console_[level] = (...args) => {
+      if (this.save)
+        this.data += this.prefix_ + msgPrefix + args.join(' ') + '\n';
+      oLog.apply(this.console_, args);
+    };
+  });
 
-/**
- * Queue up a string to print to the log.
- *
- * If a line is already pending, this string is added to it.
- *
- * The string is not actually printed to the log until flush() or println()
- * is called.  The following call sequence will result in TWO lines in the
- * log...
- *
- *   log.print('hello');
- *   log.print(' ');
- *   log.println('world');
- *
- * While a typical stream-like thing would result in 'hello world\n', this one
- * results in 'hello \nworld\n'.
- *
- * @param {string} str The string to add to the log.
- */
-lib.TestManager.Log.prototype.print = function(str) {
-  if (this.pending_) {
-    this.pending_ += str;
-  } else {
-    this.pending_ = this.prefix_ + str;
-  }
-};
+  // Wrap/bind the group functions.
+  ['group', 'groupCollapsed'].forEach((group) => {
+    const oGroup = this.console_[group];
+    this[group] = this.console_[group] = (label='') => {
+      oGroup(label);
+      if (this.save)
+        this.data += this.prefix_ + label + '\n';
+      this.prefix_ = '  '.repeat(++this.prefixStack_);
+    };
+  });
 
-/**
- * Print a line to the log and flush it immediately.
- *
- * @param {string} str The string to add to the log.
- */
-lib.TestManager.Log.prototype.println = function(str) {
-  if (this.pending_)
-    this.flush();
-
-  this.logFunction_(this.prefix_ + str);
-};
-
-/**
- * Flush any pending log message.
- */
-lib.TestManager.Log.prototype.flush = function() {
-  if (!this.pending_)
-    return;
-
-  this.logFunction_(this.pending_);
-  this.pending_ = '';
+  const oGroupEnd = this.console_.groupEnd;
+  this.groupEnd = this.console_.groupEnd = () => {
+    oGroupEnd();
+    this.prefix_ = '  '.repeat(--this.prefixStack_);
+  };
 };
 
 /**
@@ -3374,10 +3632,8 @@ lib.TestManager.Log.prototype.flush = function() {
  *
  *   // Sample asynchronous test case.
  *   MyTests.addTest('async-pop-length', function(result, cx) {
- *       var self = this;
- *
- *       var callback = function() {
- *           result.assertEQ(self.list.length, self.size - 1);
+ *       var callback = () => {
+ *           result.assertEQ(this.list.length, this.size - 1);
  *           result.pass();
  *       };
  *
@@ -3411,7 +3667,8 @@ lib.TestManager.Suite = function(suiteName) {
   ctor.getTestList = lib.TestManager.Suite.getTestList;
   ctor.testList_ = [];
   ctor.testMap_ = {};
-  ctor.prototype = { __proto__: lib.TestManager.Suite.prototype };
+  ctor.prototype = Object.create(lib.TestManager.Suite.prototype);
+  ctor.constructor = lib.TestManager.Suite;
 
   lib.TestManager.Suite.subclasses.push(ctor);
 
@@ -3547,7 +3804,7 @@ lib.TestManager.Suite.prototype.preamble = function(result, cx) {};
  *
  * Any exception here will abort the remainder of the test run.
  *
- * @param {lib.TestManager.Result} result The result object for the upcoming
+ * @param {lib.TestManager.Result} result The result object for the finished
  *     test.
  * @param {Object} cx The context object for a test run.
  */
@@ -3677,7 +3934,7 @@ lib.TestManager.TestRun = function(testManager, cx) {
 
   /**
    * Number of maximum failures.  The test run will stop when this number is
-   * reached.  If 0 or ommitted, the entire set of selected tests is run, even
+   * reached.  If 0 or omitted, the entire set of selected tests is run, even
    * if some fail.
    */
   this.maxFailures = 0;
@@ -3696,7 +3953,7 @@ lib.TestManager.TestRun = function(testManager, cx) {
  * This value can be passed to select() to indicate that all tests should
  * be selected.
  */
-lib.TestManager.TestRun.prototype.ALL_TESTS = new String('<all-tests>');
+lib.TestManager.TestRun.prototype.ALL_TESTS = lib.f.createEnum('<all-tests>');
 
 /**
  * Add a single test to the test run.
@@ -3753,7 +4010,7 @@ lib.TestManager.TestRun.prototype.selectPattern = function(pattern) {
   }
 
   if (!selectCount) {
-    this.log.println('No tests matched selection criteria: ' + pattern);
+    this.log.warn('No tests matched selection criteria: ' + pattern);
   }
 
   return selectCount;
@@ -3787,9 +4044,9 @@ lib.TestManager.TestRun.prototype.onUncaughtException_ = function(
   if (this.currentResult.status != this.currentResult.PENDING)
     when = 'after';
 
-  this.log.println('Uncaught exception ' + when + ' test case: ' +
-                   this.currentResult.test.fullName);
-  this.log.println(message + ', ' + file + ':' + line);
+  this.log.error('Uncaught exception ' + when + ' test case: ' +
+                 this.currentResult.test.fullName);
+  this.log.error(message + ', ' + file + ':' + line);
 
   this.currentResult.completeTest_(this.currentResult.FAILED, false);
 
@@ -3820,11 +4077,10 @@ lib.TestManager.TestRun.prototype.onTestRunComplete_ = function(
 
   this.duration = (new Date()) - this.startDate;
 
-  this.log.popPrefix();
-  this.log.println('} ' + this.passes.length + ' passed, ' +
-                   this.failures.length + ' failed, '  +
-                   this.msToSeconds_(this.duration));
-  this.log.println('');
+  this.log.groupEnd();
+  this.log.info(this.passes.length + ' passed, ' +
+                this.failures.length + ' failed, '  +
+                this.msToSeconds_(this.duration));
 
   this.summarize();
 
@@ -3841,17 +4097,19 @@ lib.TestManager.TestRun.prototype.onTestRunComplete_ = function(
  */
 lib.TestManager.TestRun.prototype.onResultComplete = function(result) {
   try {
-    result.suite.postamble();
+    this.testManager.testPostamble(result, this.cx);
+    result.suite.postamble(result, this.ctx);
   } catch (ex) {
-    this.log.println('Unexpected exception in postamble: ' +
-                     (ex.stack ? ex.stack : ex));
+    this.log.error('Unexpected exception in postamble: ' +
+                   (ex.stack ? ex.stack : ex));
     this.panic = true;
   }
 
-  this.log.popPrefix();
-  this.log.print('} ' + result.status + ', ' +
-                 this.msToSeconds_(result.duration));
-  this.log.flush();
+  if (result.status != result.PASSED)
+    this.log.error(result.status);
+  else if (result.duration > 500)
+    this.log.warn('Slow test took ' + this.msToSeconds_(result.duration));
+  this.log.groupEnd();
 
   if (result.status == result.FAILED) {
     this.failures.push(result);
@@ -3859,9 +4117,10 @@ lib.TestManager.TestRun.prototype.onResultComplete = function(result) {
   } else if (result.status == result.PASSED) {
     this.passes.push(result);
   } else {
-    this.log.println('Unknown result status: ' + result.test.fullName + ': ' +
-                     result.status);
-    return this.panic = true;
+    this.log.error('Unknown result status: ' + result.test.fullName + ': ' +
+                   result.status);
+    this.panic = true;
+    return;
   }
 
   this.runNextTest_();
@@ -3888,8 +4147,8 @@ lib.TestManager.TestRun.prototype.onResultComplete = function(result) {
  */
 lib.TestManager.TestRun.prototype.onResultReComplete = function(
     result, lateStatus) {
-  this.log.println('Late complete for test: ' + result.test.fullName + ': ' +
-                   lateStatus);
+  this.log.error('Late complete for test: ' + result.test.fullName + ': ' +
+                 lateStatus);
 
   // Consider any late completion a failure, even if it's a double-pass, since
   // it's a misuse of the testing API.
@@ -3904,12 +4163,15 @@ lib.TestManager.TestRun.prototype.onResultReComplete = function(
  * Run the next test in the queue.
  */
 lib.TestManager.TestRun.prototype.runNextTest_ = function() {
-  if (this.panic || !this.testQueue_.length)
-    return this.onTestRunComplete_();
+  if (this.panic || !this.testQueue_.length) {
+    this.onTestRunComplete_();
+    return;
+  }
 
   if (this.maxFailures && this.failures.length >= this.maxFailures) {
-    this.log.println('Maximum failure count reached, aborting test run.');
-    return this.onTestRunComplete_();
+    this.log.error('Maximum failure count reached, aborting test run.');
+    this.onTestRunComplete_();
+    return;
   }
 
   // Peek at the top test first.  We remove it later just before it's about
@@ -3920,30 +4182,31 @@ lib.TestManager.TestRun.prototype.runNextTest_ = function() {
 
   try {
     if (!suite || !(suite instanceof test.suiteClass)) {
-      this.log.println('Initializing suite: ' + test.suiteClass.suiteName);
+      if (suite)
+        this.log.groupEnd();
+      this.log.group(test.suiteClass.suiteName);
       suite = new test.suiteClass(this.testManager, this.cx);
     }
   } catch (ex) {
     // If test suite setup fails we're not even going to try to run the tests.
-    this.log.println('Exception during setup: ' + (ex.stack ? ex.stack : ex));
+    this.log.error('Exception during setup: ' + (ex.stack ? ex.stack : ex));
     this.panic = true;
     this.onTestRunComplete_();
     return;
   }
 
   try {
-    this.log.print('Test: ' + test.fullName + ' {');
-    this.log.pushPrefix('  ');
+    this.log.group(test.testName);
 
     this.currentResult = new lib.TestManager.Result(this, suite, test);
+    this.testManager.testPreamble(this.currentResult, this.cx);
     suite.preamble(this.currentResult, this.cx);
 
     this.testQueue_.shift();
   } catch (ex) {
-    this.log.println('Unexpected exception during test preamble: ' +
-                     (ex.stack ? ex.stack : ex));
-    this.log.popPrefix();
-    this.log.println('}');
+    this.log.error('Unexpected exception during test preamble: ' +
+                   (ex.stack ? ex.stack : ex));
+    this.log.groupEnd();
 
     this.panic = true;
     this.onTestRunComplete_();
@@ -3955,8 +4218,8 @@ lib.TestManager.TestRun.prototype.runNextTest_ = function() {
   } catch (ex) {
     // Result.run() should catch test exceptions and turn them into failures.
     // If we got here, it means there is trouble in the testing framework.
-    this.log.println('Unexpected exception during test run: ' +
-                     (ex.stack ? ex.stack : ex));
+    this.log.error('Unexpected exception during test run: ' +
+                   (ex.stack ? ex.stack : ex));
     this.panic = true;
   }
 };
@@ -3980,8 +4243,7 @@ lib.TestManager.TestRun.prototype.runNextTest_ = function() {
  * preamble will cause the test run to abort.
  */
 lib.TestManager.TestRun.prototype.run = function() {
-  this.log.println('Running ' + this.testQueue_.length + ' test(s) {');
-  this.log.pushPrefix('  ');
+  this.log.info('Running ' + this.testQueue_.length + ' test(s)');
 
   window.onerror = this.onUncaughtException_.bind(this);
   this.startDate = new Date();
@@ -4002,13 +4264,13 @@ lib.TestManager.TestRun.prototype.msToSeconds_ = function(ms) {
 lib.TestManager.TestRun.prototype.summarize = function() {
   if (this.failures.length) {
     for (var i = 0; i < this.failures.length; i++) {
-      this.log.println('FAILED: ' + this.failures[i].test.fullName);
+      this.log.error('FAILED: ' + this.failures[i].test.fullName);
     }
   }
 
   if (this.testQueue_.length) {
-    this.log.println('Test run incomplete: ' + this.testQueue_.length +
-                     ' test(s) were not run.');
+    this.log.warn('Test run incomplete: ' + this.testQueue_.length +
+                  ' test(s) were not run.');
   }
 };
 
@@ -4083,14 +4345,12 @@ lib.TestManager.Result.TestComplete = function(result) {
 lib.TestManager.Result.TestComplete.prototype.toString = function() {
   return 'lib.TestManager.Result.TestComplete: ' + this.result.test.fullName +
       ', status: ' + this.result.status;
-}
+};
 
 /**
  * Start the test associated with this result.
  */
 lib.TestManager.Result.prototype.run = function() {
-  var self = this;
-
   this.startDate = new Date();
   this.test.run(this);
 
@@ -4181,7 +4441,7 @@ lib.TestManager.Result.prototype.completeTest_ = function(status, opt_throw) {
  * @param {*} actual The actual measured value.
  * @param {*} expected The value expected.
  * @param {string} opt_name An optional name used to identify this
- *     assertion in the test log.  If ommitted it will be the file:line
+ *     assertion in the test log.  If omitted it will be the file:line
  *     of the caller.
  */
 lib.TestManager.Result.prototype.assertEQ = function(
@@ -4192,7 +4452,7 @@ lib.TestManager.Result.prototype.assertEQ = function(
       return value;
 
     var str = String(value);
-    var ary = str.split('\n').map(function (e) { return JSON.stringify(e) });
+    var ary = str.split('\n').map((e) => JSON.stringify(e));
     if (ary.length > 1) {
       // If the string has newlines, start it off on its own line so that
       // it's easier to compare against another string with newlines.
@@ -4204,6 +4464,11 @@ lib.TestManager.Result.prototype.assertEQ = function(
 
   if (actual === expected)
     return;
+
+  // Deal with common object types since JavaScript can't.
+  if (expected instanceof Array)
+    if (lib.array.compare(actual, expected))
+      return;
 
   var name = opt_name ? '[' + opt_name + ']' : '';
 
@@ -4222,7 +4487,7 @@ lib.TestManager.Result.prototype.assertEQ = function(
  *
  * @param {boolean} actual The actual measured value.
  * @param {string} opt_name An optional name used to identify this
- *     assertion in the test log.  If ommitted it will be the file:line
+ *     assertion in the test log.  If omitted it will be the file:line
  *     of the caller.
  */
 lib.TestManager.Result.prototype.assert = function(actual, opt_name) {
@@ -4259,7 +4524,7 @@ lib.TestManager.Result.prototype.getCallerLocation_ = function(frameIndex) {
  * Write a message to the result log.
  */
 lib.TestManager.Result.prototype.println = function(message) {
-  this.testRun.log.println(message);
+  this.testRun.log.info(message);
 };
 
 /**
@@ -4294,8 +4559,8 @@ lib.TestManager.Result.prototype.pass = function() {
 // TODO(davidben): When the string encoding API is implemented,
 // replace this with the native in-browser implementation.
 //
-// http://wiki.whatwg.org/wiki/StringEncoding
-// http://dvcs.w3.org/hg/encoding/raw-file/tip/Overview.html
+// https://wiki.whatwg.org/wiki/StringEncoding
+// https://encoding.spec.whatwg.org/
 
 /**
  * A stateful UTF-8 decoder.
@@ -4454,7 +4719,7 @@ lib.encodeUTF8 = function(str) {
   }
   return ret;
 };
-// SOURCE FILE: libdot/js/lib_wc.js
+// SOURCE FILE: libdot/third_party/wcwidth/lib_wc.js
 // Copyright (c) 2014 The Chromium OS Authors. All rights reserved.
 // Use of lib.wc source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
@@ -4548,7 +4813,7 @@ lib.encodeUTF8 = function(str) {
  *  - Spacing characters in the East Asian Wide (W) or East Asian Full-width (F)
  *    category as defined in Unicode Technical Report #11 have a column width of
  *    2.
- *  - East Asian Ambigous characters are taken into account if
+ *  - East Asian Ambiguous characters are taken into account if
  *    regardCjkAmbiguous flag is enabled. They have a column width of 2.
  *  - All remaining characters (including all printable ISO 8859-1 and WGL4
  *    characters, Unicode control characters, etc.) have a column width of 1.
@@ -4561,7 +4826,7 @@ lib.wc = {};
 // Width of a nul character.
 lib.wc.nulWidth = 0;
 
-// Width of a control charater.
+// Width of a control character.
 lib.wc.controlWidth = 0;
 
 // Flag whether to consider East Asian Ambiguous characters.
@@ -4571,135 +4836,255 @@ lib.wc.regardCjkAmbiguous = false;
 lib.wc.cjkAmbiguousWidth = 2;
 
 // Sorted list of non-overlapping intervals of non-spacing characters
-// generated by "uniset +cat=Me +cat=Mn +cat=Cf -00AD +1160-11FF +200B c"
+// generated by the `./ranges.py` helper.
 lib.wc.combining = [
-    [ 0x0300, 0x036F ], [ 0x0483, 0x0486 ], [ 0x0488, 0x0489 ],
-    [ 0x0591, 0x05BD ], [ 0x05BF, 0x05BF ], [ 0x05C1, 0x05C2 ],
-    [ 0x05C4, 0x05C5 ], [ 0x05C7, 0x05C7 ], [ 0x0600, 0x0603 ],
-    [ 0x0610, 0x0615 ], [ 0x064B, 0x065E ], [ 0x0670, 0x0670 ],
-    [ 0x06D6, 0x06E4 ], [ 0x06E7, 0x06E8 ], [ 0x06EA, 0x06ED ],
-    [ 0x070F, 0x070F ], [ 0x0711, 0x0711 ], [ 0x0730, 0x074A ],
-    [ 0x07A6, 0x07B0 ], [ 0x07EB, 0x07F3 ], [ 0x0901, 0x0902 ],
-    [ 0x093C, 0x093C ], [ 0x0941, 0x0948 ], [ 0x094D, 0x094D ],
-    [ 0x0951, 0x0954 ], [ 0x0962, 0x0963 ], [ 0x0981, 0x0981 ],
-    [ 0x09BC, 0x09BC ], [ 0x09C1, 0x09C4 ], [ 0x09CD, 0x09CD ],
-    [ 0x09E2, 0x09E3 ], [ 0x0A01, 0x0A02 ], [ 0x0A3C, 0x0A3C ],
-    [ 0x0A41, 0x0A42 ], [ 0x0A47, 0x0A48 ], [ 0x0A4B, 0x0A4D ],
-    [ 0x0A70, 0x0A71 ], [ 0x0A81, 0x0A82 ], [ 0x0ABC, 0x0ABC ],
-    [ 0x0AC1, 0x0AC5 ], [ 0x0AC7, 0x0AC8 ], [ 0x0ACD, 0x0ACD ],
-    [ 0x0AE2, 0x0AE3 ], [ 0x0B01, 0x0B01 ], [ 0x0B3C, 0x0B3C ],
-    [ 0x0B3F, 0x0B3F ], [ 0x0B41, 0x0B43 ], [ 0x0B4D, 0x0B4D ],
-    [ 0x0B56, 0x0B56 ], [ 0x0B82, 0x0B82 ], [ 0x0BC0, 0x0BC0 ],
-    [ 0x0BCD, 0x0BCD ], [ 0x0C3E, 0x0C40 ], [ 0x0C46, 0x0C48 ],
-    [ 0x0C4A, 0x0C4D ], [ 0x0C55, 0x0C56 ], [ 0x0CBC, 0x0CBC ],
-    [ 0x0CBF, 0x0CBF ], [ 0x0CC6, 0x0CC6 ], [ 0x0CCC, 0x0CCD ],
-    [ 0x0CE2, 0x0CE3 ], [ 0x0D41, 0x0D43 ], [ 0x0D4D, 0x0D4D ],
-    [ 0x0DCA, 0x0DCA ], [ 0x0DD2, 0x0DD4 ], [ 0x0DD6, 0x0DD6 ],
-    [ 0x0E31, 0x0E31 ], [ 0x0E34, 0x0E3A ], [ 0x0E47, 0x0E4E ],
-    [ 0x0EB1, 0x0EB1 ], [ 0x0EB4, 0x0EB9 ], [ 0x0EBB, 0x0EBC ],
-    [ 0x0EC8, 0x0ECD ], [ 0x0F18, 0x0F19 ], [ 0x0F35, 0x0F35 ],
-    [ 0x0F37, 0x0F37 ], [ 0x0F39, 0x0F39 ], [ 0x0F71, 0x0F7E ],
-    [ 0x0F80, 0x0F84 ], [ 0x0F86, 0x0F87 ], [ 0x0F90, 0x0F97 ],
-    [ 0x0F99, 0x0FBC ], [ 0x0FC6, 0x0FC6 ], [ 0x102D, 0x1030 ],
-    [ 0x1032, 0x1032 ], [ 0x1036, 0x1037 ], [ 0x1039, 0x1039 ],
-    [ 0x1058, 0x1059 ], [ 0x1160, 0x11FF ], [ 0x135F, 0x135F ],
-    [ 0x1712, 0x1714 ], [ 0x1732, 0x1734 ], [ 0x1752, 0x1753 ],
-    [ 0x1772, 0x1773 ], [ 0x17B4, 0x17B5 ], [ 0x17B7, 0x17BD ],
-    [ 0x17C6, 0x17C6 ], [ 0x17C9, 0x17D3 ], [ 0x17DD, 0x17DD ],
-    [ 0x180B, 0x180D ], [ 0x18A9, 0x18A9 ], [ 0x1920, 0x1922 ],
-    [ 0x1927, 0x1928 ], [ 0x1932, 0x1932 ], [ 0x1939, 0x193B ],
-    [ 0x1A17, 0x1A18 ], [ 0x1B00, 0x1B03 ], [ 0x1B34, 0x1B34 ],
-    [ 0x1B36, 0x1B3A ], [ 0x1B3C, 0x1B3C ], [ 0x1B42, 0x1B42 ],
-    [ 0x1B6B, 0x1B73 ], [ 0x1DC0, 0x1DCA ], [ 0x1DFE, 0x1DFF ],
-    [ 0x200B, 0x200F ], [ 0x202A, 0x202E ], [ 0x2060, 0x2063 ],
-    [ 0x206A, 0x206F ], [ 0x20D0, 0x20EF ], [ 0x302A, 0x302F ],
-    [ 0x3099, 0x309A ], [ 0xA806, 0xA806 ], [ 0xA80B, 0xA80B ],
-    [ 0xA825, 0xA826 ], [ 0xFB1E, 0xFB1E ], [ 0xFE00, 0xFE0F ],
-    [ 0xFE20, 0xFE23 ], [ 0xFEFF, 0xFEFF ], [ 0xFFF9, 0xFFFB ],
-    [ 0x10A01, 0x10A03 ], [ 0x10A05, 0x10A06 ], [ 0x10A0C, 0x10A0F ],
-    [ 0x10A38, 0x10A3A ], [ 0x10A3F, 0x10A3F ], [ 0x1D167, 0x1D169 ],
-    [ 0x1D173, 0x1D182 ], [ 0x1D185, 0x1D18B ], [ 0x1D1AA, 0x1D1AD ],
-    [ 0x1D242, 0x1D244 ], [ 0xE0001, 0xE0001 ], [ 0xE0020, 0xE007F ],
-    [ 0xE0100, 0xE01EF ]
+    [0x00ad, 0x00ad], [0x0300, 0x036f], [0x0483, 0x0489],
+    [0x0591, 0x05bd], [0x05bf, 0x05bf], [0x05c1, 0x05c2],
+    [0x05c4, 0x05c5], [0x05c7, 0x05c7], [0x0610, 0x061a],
+    [0x061c, 0x061c], [0x064b, 0x065f], [0x0670, 0x0670],
+    [0x06d6, 0x06dc], [0x06df, 0x06e4], [0x06e7, 0x06e8],
+    [0x06ea, 0x06ed], [0x0711, 0x0711], [0x0730, 0x074a],
+    [0x07a6, 0x07b0], [0x07eb, 0x07f3], [0x0816, 0x0819],
+    [0x081b, 0x0823], [0x0825, 0x0827], [0x0829, 0x082d],
+    [0x0859, 0x085b], [0x08d4, 0x08e1], [0x08e3, 0x0902],
+    [0x093a, 0x093a], [0x093c, 0x093c], [0x0941, 0x0948],
+    [0x094d, 0x094d], [0x0951, 0x0957], [0x0962, 0x0963],
+    [0x0981, 0x0981], [0x09bc, 0x09bc], [0x09c1, 0x09c4],
+    [0x09cd, 0x09cd], [0x09e2, 0x09e3], [0x0a01, 0x0a02],
+    [0x0a3c, 0x0a3c], [0x0a41, 0x0a42], [0x0a47, 0x0a48],
+    [0x0a4b, 0x0a4d], [0x0a51, 0x0a51], [0x0a70, 0x0a71],
+    [0x0a75, 0x0a75], [0x0a81, 0x0a82], [0x0abc, 0x0abc],
+    [0x0ac1, 0x0ac5], [0x0ac7, 0x0ac8], [0x0acd, 0x0acd],
+    [0x0ae2, 0x0ae3], [0x0afa, 0x0aff], [0x0b01, 0x0b01],
+    [0x0b3c, 0x0b3c], [0x0b3f, 0x0b3f], [0x0b41, 0x0b44],
+    [0x0b4d, 0x0b4d], [0x0b56, 0x0b56], [0x0b62, 0x0b63],
+    [0x0b82, 0x0b82], [0x0bc0, 0x0bc0], [0x0bcd, 0x0bcd],
+    [0x0c00, 0x0c00], [0x0c3e, 0x0c40], [0x0c46, 0x0c48],
+    [0x0c4a, 0x0c4d], [0x0c55, 0x0c56], [0x0c62, 0x0c63],
+    [0x0c81, 0x0c81], [0x0cbc, 0x0cbc], [0x0cbf, 0x0cbf],
+    [0x0cc6, 0x0cc6], [0x0ccc, 0x0ccd], [0x0ce2, 0x0ce3],
+    [0x0d00, 0x0d01], [0x0d3b, 0x0d3c], [0x0d41, 0x0d44],
+    [0x0d4d, 0x0d4d], [0x0d62, 0x0d63], [0x0dca, 0x0dca],
+    [0x0dd2, 0x0dd4], [0x0dd6, 0x0dd6], [0x0e31, 0x0e31],
+    [0x0e34, 0x0e3a], [0x0e47, 0x0e4e], [0x0eb1, 0x0eb1],
+    [0x0eb4, 0x0eb9], [0x0ebb, 0x0ebc], [0x0ec8, 0x0ecd],
+    [0x0f18, 0x0f19], [0x0f35, 0x0f35], [0x0f37, 0x0f37],
+    [0x0f39, 0x0f39], [0x0f71, 0x0f7e], [0x0f80, 0x0f84],
+    [0x0f86, 0x0f87], [0x0f8d, 0x0f97], [0x0f99, 0x0fbc],
+    [0x0fc6, 0x0fc6], [0x102d, 0x1030], [0x1032, 0x1037],
+    [0x1039, 0x103a], [0x103d, 0x103e], [0x1058, 0x1059],
+    [0x105e, 0x1060], [0x1071, 0x1074], [0x1082, 0x1082],
+    [0x1085, 0x1086], [0x108d, 0x108d], [0x109d, 0x109d],
+    [0x1160, 0x11ff], [0x135d, 0x135f], [0x1712, 0x1714],
+    [0x1732, 0x1734], [0x1752, 0x1753], [0x1772, 0x1773],
+    [0x17b4, 0x17b5], [0x17b7, 0x17bd], [0x17c6, 0x17c6],
+    [0x17c9, 0x17d3], [0x17dd, 0x17dd], [0x180b, 0x180e],
+    [0x1885, 0x1886], [0x18a9, 0x18a9], [0x1920, 0x1922],
+    [0x1927, 0x1928], [0x1932, 0x1932], [0x1939, 0x193b],
+    [0x1a17, 0x1a18], [0x1a1b, 0x1a1b], [0x1a56, 0x1a56],
+    [0x1a58, 0x1a5e], [0x1a60, 0x1a60], [0x1a62, 0x1a62],
+    [0x1a65, 0x1a6c], [0x1a73, 0x1a7c], [0x1a7f, 0x1a7f],
+    [0x1ab0, 0x1abe], [0x1b00, 0x1b03], [0x1b34, 0x1b34],
+    [0x1b36, 0x1b3a], [0x1b3c, 0x1b3c], [0x1b42, 0x1b42],
+    [0x1b6b, 0x1b73], [0x1b80, 0x1b81], [0x1ba2, 0x1ba5],
+    [0x1ba8, 0x1ba9], [0x1bab, 0x1bad], [0x1be6, 0x1be6],
+    [0x1be8, 0x1be9], [0x1bed, 0x1bed], [0x1bef, 0x1bf1],
+    [0x1c2c, 0x1c33], [0x1c36, 0x1c37], [0x1cd0, 0x1cd2],
+    [0x1cd4, 0x1ce0], [0x1ce2, 0x1ce8], [0x1ced, 0x1ced],
+    [0x1cf4, 0x1cf4], [0x1cf8, 0x1cf9], [0x1dc0, 0x1df9],
+    [0x1dfb, 0x1dff], [0x200b, 0x200f], [0x202a, 0x202e],
+    [0x2060, 0x2064], [0x2066, 0x206f], [0x20d0, 0x20f0],
+    [0x2cef, 0x2cf1], [0x2d7f, 0x2d7f], [0x2de0, 0x2dff],
+    [0x302a, 0x302d], [0x3099, 0x309a], [0xa66f, 0xa672],
+    [0xa674, 0xa67d], [0xa69e, 0xa69f], [0xa6f0, 0xa6f1],
+    [0xa802, 0xa802], [0xa806, 0xa806], [0xa80b, 0xa80b],
+    [0xa825, 0xa826], [0xa8c4, 0xa8c5], [0xa8e0, 0xa8f1],
+    [0xa926, 0xa92d], [0xa947, 0xa951], [0xa980, 0xa982],
+    [0xa9b3, 0xa9b3], [0xa9b6, 0xa9b9], [0xa9bc, 0xa9bc],
+    [0xa9e5, 0xa9e5], [0xaa29, 0xaa2e], [0xaa31, 0xaa32],
+    [0xaa35, 0xaa36], [0xaa43, 0xaa43], [0xaa4c, 0xaa4c],
+    [0xaa7c, 0xaa7c], [0xaab0, 0xaab0], [0xaab2, 0xaab4],
+    [0xaab7, 0xaab8], [0xaabe, 0xaabf], [0xaac1, 0xaac1],
+    [0xaaec, 0xaaed], [0xaaf6, 0xaaf6], [0xabe5, 0xabe5],
+    [0xabe8, 0xabe8], [0xabed, 0xabed], [0xfb1e, 0xfb1e],
+    [0xfe00, 0xfe0f], [0xfe20, 0xfe2f], [0xfeff, 0xfeff],
+    [0xfff9, 0xfffb], [0x101fd, 0x101fd], [0x102e0, 0x102e0],
+    [0x10376, 0x1037a], [0x10a01, 0x10a03], [0x10a05, 0x10a06],
+    [0x10a0c, 0x10a0f], [0x10a38, 0x10a3a], [0x10a3f, 0x10a3f],
+    [0x10ae5, 0x10ae6], [0x11001, 0x11001], [0x11038, 0x11046],
+    [0x1107f, 0x11081], [0x110b3, 0x110b6], [0x110b9, 0x110ba],
+    [0x11100, 0x11102], [0x11127, 0x1112b], [0x1112d, 0x11134],
+    [0x11173, 0x11173], [0x11180, 0x11181], [0x111b6, 0x111be],
+    [0x111ca, 0x111cc], [0x1122f, 0x11231], [0x11234, 0x11234],
+    [0x11236, 0x11237], [0x1123e, 0x1123e], [0x112df, 0x112df],
+    [0x112e3, 0x112ea], [0x11300, 0x11301], [0x1133c, 0x1133c],
+    [0x11340, 0x11340], [0x11366, 0x1136c], [0x11370, 0x11374],
+    [0x11438, 0x1143f], [0x11442, 0x11444], [0x11446, 0x11446],
+    [0x114b3, 0x114b8], [0x114ba, 0x114ba], [0x114bf, 0x114c0],
+    [0x114c2, 0x114c3], [0x115b2, 0x115b5], [0x115bc, 0x115bd],
+    [0x115bf, 0x115c0], [0x115dc, 0x115dd], [0x11633, 0x1163a],
+    [0x1163d, 0x1163d], [0x1163f, 0x11640], [0x116ab, 0x116ab],
+    [0x116ad, 0x116ad], [0x116b0, 0x116b5], [0x116b7, 0x116b7],
+    [0x1171d, 0x1171f], [0x11722, 0x11725], [0x11727, 0x1172b],
+    [0x11a01, 0x11a06], [0x11a09, 0x11a0a], [0x11a33, 0x11a38],
+    [0x11a3b, 0x11a3e], [0x11a47, 0x11a47], [0x11a51, 0x11a56],
+    [0x11a59, 0x11a5b], [0x11a8a, 0x11a96], [0x11a98, 0x11a99],
+    [0x11c30, 0x11c36], [0x11c38, 0x11c3d], [0x11c3f, 0x11c3f],
+    [0x11c92, 0x11ca7], [0x11caa, 0x11cb0], [0x11cb2, 0x11cb3],
+    [0x11cb5, 0x11cb6], [0x11d31, 0x11d36], [0x11d3a, 0x11d3a],
+    [0x11d3c, 0x11d3d], [0x11d3f, 0x11d45], [0x11d47, 0x11d47],
+    [0x16af0, 0x16af4], [0x16b30, 0x16b36], [0x16f8f, 0x16f92],
+    [0x1bc9d, 0x1bc9e], [0x1bca0, 0x1bca3], [0x1d167, 0x1d169],
+    [0x1d173, 0x1d182], [0x1d185, 0x1d18b], [0x1d1aa, 0x1d1ad],
+    [0x1d242, 0x1d244], [0x1da00, 0x1da36], [0x1da3b, 0x1da6c],
+    [0x1da75, 0x1da75], [0x1da84, 0x1da84], [0x1da9b, 0x1da9f],
+    [0x1daa1, 0x1daaf], [0x1e000, 0x1e006], [0x1e008, 0x1e018],
+    [0x1e01b, 0x1e021], [0x1e023, 0x1e024], [0x1e026, 0x1e02a],
+    [0x1e8d0, 0x1e8d6], [0x1e944, 0x1e94a], [0xe0001, 0xe0001],
+    [0xe0020, 0xe007f], [0xe0100, 0xe01ef],
 ];
 
 // Sorted list of non-overlapping intervals of East Asian Ambiguous characters
-// generated by "uniset +WIDTH-A -cat=Me -cat=Mn -cat=Cf c"
+// generated by the `./ranges.py` helper.
 lib.wc.ambiguous = [
-    [ 0x00A1, 0x00A1 ], [ 0x00A4, 0x00A4 ], [ 0x00A7, 0x00A8 ],
-    [ 0x00AA, 0x00AA ], [ 0x00AE, 0x00AE ], [ 0x00B0, 0x00B4 ],
-    [ 0x00B6, 0x00BA ], [ 0x00BC, 0x00BF ], [ 0x00C6, 0x00C6 ],
-    [ 0x00D0, 0x00D0 ], [ 0x00D7, 0x00D8 ], [ 0x00DE, 0x00E1 ],
-    [ 0x00E6, 0x00E6 ], [ 0x00E8, 0x00EA ], [ 0x00EC, 0x00ED ],
-    [ 0x00F0, 0x00F0 ], [ 0x00F2, 0x00F3 ], [ 0x00F7, 0x00FA ],
-    [ 0x00FC, 0x00FC ], [ 0x00FE, 0x00FE ], [ 0x0101, 0x0101 ],
-    [ 0x0111, 0x0111 ], [ 0x0113, 0x0113 ], [ 0x011B, 0x011B ],
-    [ 0x0126, 0x0127 ], [ 0x012B, 0x012B ], [ 0x0131, 0x0133 ],
-    [ 0x0138, 0x0138 ], [ 0x013F, 0x0142 ], [ 0x0144, 0x0144 ],
-    [ 0x0148, 0x014B ], [ 0x014D, 0x014D ], [ 0x0152, 0x0153 ],
-    [ 0x0166, 0x0167 ], [ 0x016B, 0x016B ], [ 0x01CE, 0x01CE ],
-    [ 0x01D0, 0x01D0 ], [ 0x01D2, 0x01D2 ], [ 0x01D4, 0x01D4 ],
-    [ 0x01D6, 0x01D6 ], [ 0x01D8, 0x01D8 ], [ 0x01DA, 0x01DA ],
-    [ 0x01DC, 0x01DC ], [ 0x0251, 0x0251 ], [ 0x0261, 0x0261 ],
-    [ 0x02C4, 0x02C4 ], [ 0x02C7, 0x02C7 ], [ 0x02C9, 0x02CB ],
-    [ 0x02CD, 0x02CD ], [ 0x02D0, 0x02D0 ], [ 0x02D8, 0x02DB ],
-    [ 0x02DD, 0x02DD ], [ 0x02DF, 0x02DF ], [ 0x0391, 0x03A1 ],
-    [ 0x03A3, 0x03A9 ], [ 0x03B1, 0x03C1 ], [ 0x03C3, 0x03C9 ],
-    [ 0x0401, 0x0401 ], [ 0x0410, 0x044F ], [ 0x0451, 0x0451 ],
-    [ 0x2010, 0x2010 ], [ 0x2013, 0x2016 ], [ 0x2018, 0x2019 ],
-    [ 0x201C, 0x201D ], [ 0x2020, 0x2022 ], [ 0x2024, 0x2027 ],
-    [ 0x2030, 0x2030 ], [ 0x2032, 0x2033 ], [ 0x2035, 0x2035 ],
-    [ 0x203B, 0x203B ], [ 0x203E, 0x203E ], [ 0x2074, 0x2074 ],
-    [ 0x207F, 0x207F ], [ 0x2081, 0x2084 ], [ 0x20AC, 0x20AC ],
-    [ 0x2103, 0x2103 ], [ 0x2105, 0x2105 ], [ 0x2109, 0x2109 ],
-    [ 0x2113, 0x2113 ], [ 0x2116, 0x2116 ], [ 0x2121, 0x2122 ],
-    [ 0x2126, 0x2126 ], [ 0x212B, 0x212B ], [ 0x2153, 0x2154 ],
-    [ 0x215B, 0x215E ], [ 0x2160, 0x216B ], [ 0x2170, 0x2179 ],
-    [ 0x2190, 0x2199 ], [ 0x21B8, 0x21B9 ], [ 0x21D2, 0x21D2 ],
-    [ 0x21D4, 0x21D4 ], [ 0x21E7, 0x21E7 ], [ 0x2200, 0x2200 ],
-    [ 0x2202, 0x2203 ], [ 0x2207, 0x2208 ], [ 0x220B, 0x220B ],
-    [ 0x220F, 0x220F ], [ 0x2211, 0x2211 ], [ 0x2215, 0x2215 ],
-    [ 0x221A, 0x221A ], [ 0x221D, 0x2220 ], [ 0x2223, 0x2223 ],
-    [ 0x2225, 0x2225 ], [ 0x2227, 0x222C ], [ 0x222E, 0x222E ],
-    [ 0x2234, 0x2237 ], [ 0x223C, 0x223D ], [ 0x2248, 0x2248 ],
-    [ 0x224C, 0x224C ], [ 0x2252, 0x2252 ], [ 0x2260, 0x2261 ],
-    [ 0x2264, 0x2267 ], [ 0x226A, 0x226B ], [ 0x226E, 0x226F ],
-    [ 0x2282, 0x2283 ], [ 0x2286, 0x2287 ], [ 0x2295, 0x2295 ],
-    [ 0x2299, 0x2299 ], [ 0x22A5, 0x22A5 ], [ 0x22BF, 0x22BF ],
-    [ 0x2312, 0x2312 ], [ 0x2460, 0x24E9 ], [ 0x24EB, 0x254B ],
-    [ 0x2550, 0x2573 ], [ 0x2580, 0x258F ], [ 0x2592, 0x2595 ],
-    [ 0x25A0, 0x25A1 ], [ 0x25A3, 0x25A9 ], [ 0x25B2, 0x25B3 ],
-    [ 0x25B6, 0x25B7 ], [ 0x25BC, 0x25BD ], [ 0x25C0, 0x25C1 ],
-    [ 0x25C6, 0x25C8 ], [ 0x25CB, 0x25CB ], [ 0x25CE, 0x25D1 ],
-    [ 0x25E2, 0x25E5 ], [ 0x25EF, 0x25EF ], [ 0x2605, 0x2606 ],
-    [ 0x2609, 0x2609 ], [ 0x260E, 0x260F ], [ 0x2614, 0x2615 ],
-    [ 0x261C, 0x261C ], [ 0x261E, 0x261E ], [ 0x2640, 0x2640 ],
-    [ 0x2642, 0x2642 ], [ 0x2660, 0x2661 ], [ 0x2663, 0x2665 ],
-    [ 0x2667, 0x266A ], [ 0x266C, 0x266D ], [ 0x266F, 0x266F ],
-    [ 0x273D, 0x273D ], [ 0x2776, 0x277F ], [ 0xE000, 0xF8FF ],
-    [ 0xFFFD, 0xFFFD ], [ 0xF0000, 0xFFFFD ], [ 0x100000, 0x10FFFD ]
+    [0x00a1, 0x00a1], [0x00a4, 0x00a4], [0x00a7, 0x00a8],
+    [0x00aa, 0x00aa], [0x00ad, 0x00ae], [0x00b0, 0x00b4],
+    [0x00b6, 0x00ba], [0x00bc, 0x00bf], [0x00c6, 0x00c6],
+    [0x00d0, 0x00d0], [0x00d7, 0x00d8], [0x00de, 0x00e1],
+    [0x00e6, 0x00e6], [0x00e8, 0x00ea], [0x00ec, 0x00ed],
+    [0x00f0, 0x00f0], [0x00f2, 0x00f3], [0x00f7, 0x00fa],
+    [0x00fc, 0x00fc], [0x00fe, 0x00fe], [0x0101, 0x0101],
+    [0x0111, 0x0111], [0x0113, 0x0113], [0x011b, 0x011b],
+    [0x0126, 0x0127], [0x012b, 0x012b], [0x0131, 0x0133],
+    [0x0138, 0x0138], [0x013f, 0x0142], [0x0144, 0x0144],
+    [0x0148, 0x014b], [0x014d, 0x014d], [0x0152, 0x0153],
+    [0x0166, 0x0167], [0x016b, 0x016b], [0x01ce, 0x01ce],
+    [0x01d0, 0x01d0], [0x01d2, 0x01d2], [0x01d4, 0x01d4],
+    [0x01d6, 0x01d6], [0x01d8, 0x01d8], [0x01da, 0x01da],
+    [0x01dc, 0x01dc], [0x0251, 0x0251], [0x0261, 0x0261],
+    [0x02c4, 0x02c4], [0x02c7, 0x02c7], [0x02c9, 0x02cb],
+    [0x02cd, 0x02cd], [0x02d0, 0x02d0], [0x02d8, 0x02db],
+    [0x02dd, 0x02dd], [0x02df, 0x02df], [0x0300, 0x036f],
+    [0x0391, 0x03a1], [0x03a3, 0x03a9], [0x03b1, 0x03c1],
+    [0x03c3, 0x03c9], [0x0401, 0x0401], [0x0410, 0x044f],
+    [0x0451, 0x0451], [0x1100, 0x115f], [0x2010, 0x2010],
+    [0x2013, 0x2016], [0x2018, 0x2019], [0x201c, 0x201d],
+    [0x2020, 0x2022], [0x2024, 0x2027], [0x2030, 0x2030],
+    [0x2032, 0x2033], [0x2035, 0x2035], [0x203b, 0x203b],
+    [0x203e, 0x203e], [0x2074, 0x2074], [0x207f, 0x207f],
+    [0x2081, 0x2084], [0x20ac, 0x20ac], [0x2103, 0x2103],
+    [0x2105, 0x2105], [0x2109, 0x2109], [0x2113, 0x2113],
+    [0x2116, 0x2116], [0x2121, 0x2122], [0x2126, 0x2126],
+    [0x212b, 0x212b], [0x2153, 0x2154], [0x215b, 0x215e],
+    [0x2160, 0x216b], [0x2170, 0x2179], [0x2189, 0x2189],
+    [0x2190, 0x2199], [0x21b8, 0x21b9], [0x21d2, 0x21d2],
+    [0x21d4, 0x21d4], [0x21e7, 0x21e7], [0x2200, 0x2200],
+    [0x2202, 0x2203], [0x2207, 0x2208], [0x220b, 0x220b],
+    [0x220f, 0x220f], [0x2211, 0x2211], [0x2215, 0x2215],
+    [0x221a, 0x221a], [0x221d, 0x2220], [0x2223, 0x2223],
+    [0x2225, 0x2225], [0x2227, 0x222c], [0x222e, 0x222e],
+    [0x2234, 0x2237], [0x223c, 0x223d], [0x2248, 0x2248],
+    [0x224c, 0x224c], [0x2252, 0x2252], [0x2260, 0x2261],
+    [0x2264, 0x2267], [0x226a, 0x226b], [0x226e, 0x226f],
+    [0x2282, 0x2283], [0x2286, 0x2287], [0x2295, 0x2295],
+    [0x2299, 0x2299], [0x22a5, 0x22a5], [0x22bf, 0x22bf],
+    [0x2312, 0x2312], [0x231a, 0x231b], [0x2329, 0x232a],
+    [0x23e9, 0x23ec], [0x23f0, 0x23f0], [0x23f3, 0x23f3],
+    [0x2460, 0x24e9], [0x24eb, 0x254b], [0x2550, 0x2573],
+    [0x2580, 0x258f], [0x2592, 0x2595], [0x25a0, 0x25a1],
+    [0x25a3, 0x25a9], [0x25b2, 0x25b3], [0x25b6, 0x25b7],
+    [0x25bc, 0x25bd], [0x25c0, 0x25c1], [0x25c6, 0x25c8],
+    [0x25cb, 0x25cb], [0x25ce, 0x25d1], [0x25e2, 0x25e5],
+    [0x25ef, 0x25ef], [0x25fd, 0x25fe], [0x2605, 0x2606],
+    [0x2609, 0x2609], [0x260e, 0x260f], [0x2614, 0x2615],
+    [0x261c, 0x261c], [0x261e, 0x261e], [0x2640, 0x2640],
+    [0x2642, 0x2642], [0x2648, 0x2653], [0x2660, 0x2661],
+    [0x2663, 0x2665], [0x2667, 0x266a], [0x266c, 0x266d],
+    [0x266f, 0x266f], [0x267f, 0x267f], [0x2693, 0x2693],
+    [0x269e, 0x269f], [0x26a1, 0x26a1], [0x26aa, 0x26ab],
+    [0x26bd, 0x26bf], [0x26c4, 0x26e1], [0x26e3, 0x26e3],
+    [0x26e8, 0x26ff], [0x2705, 0x2705], [0x270a, 0x270b],
+    [0x2728, 0x2728], [0x273d, 0x273d], [0x274c, 0x274c],
+    [0x274e, 0x274e], [0x2753, 0x2755], [0x2757, 0x2757],
+    [0x2776, 0x277f], [0x2795, 0x2797], [0x27b0, 0x27b0],
+    [0x27bf, 0x27bf], [0x2b1b, 0x2b1c], [0x2b50, 0x2b50],
+    [0x2b55, 0x2b59], [0x2e80, 0x2fdf], [0x2ff0, 0x303e],
+    [0x3040, 0x4dbf], [0x4e00, 0xa4cf], [0xa960, 0xa97f],
+    [0xac00, 0xd7a3], [0xe000, 0xfaff], [0xfe00, 0xfe19],
+    [0xfe30, 0xfe6f], [0xff01, 0xff60], [0xffe0, 0xffe6],
+    [0xfffd, 0xfffd], [0x16fe0, 0x16fe1], [0x17000, 0x18aff],
+    [0x1b000, 0x1b12f], [0x1b170, 0x1b2ff], [0x1f004, 0x1f004],
+    [0x1f0cf, 0x1f0cf], [0x1f100, 0x1f10a], [0x1f110, 0x1f12d],
+    [0x1f130, 0x1f169], [0x1f170, 0x1f1ac], [0x1f200, 0x1f202],
+    [0x1f210, 0x1f23b], [0x1f240, 0x1f248], [0x1f250, 0x1f251],
+    [0x1f260, 0x1f265], [0x1f300, 0x1f320], [0x1f32d, 0x1f335],
+    [0x1f337, 0x1f37c], [0x1f37e, 0x1f393], [0x1f3a0, 0x1f3ca],
+    [0x1f3cf, 0x1f3d3], [0x1f3e0, 0x1f3f0], [0x1f3f4, 0x1f3f4],
+    [0x1f3f8, 0x1f43e], [0x1f440, 0x1f440], [0x1f442, 0x1f4fc],
+    [0x1f4ff, 0x1f53d], [0x1f54b, 0x1f54e], [0x1f550, 0x1f567],
+    [0x1f57a, 0x1f57a], [0x1f595, 0x1f596], [0x1f5a4, 0x1f5a4],
+    [0x1f5fb, 0x1f64f], [0x1f680, 0x1f6c5], [0x1f6cc, 0x1f6cc],
+    [0x1f6d0, 0x1f6d2], [0x1f6eb, 0x1f6ec], [0x1f6f4, 0x1f6f8],
+    [0x1f910, 0x1f93e], [0x1f940, 0x1f94c], [0x1f950, 0x1f96b],
+    [0x1f980, 0x1f997], [0x1f9c0, 0x1f9c0], [0x1f9d0, 0x1f9e6],
+    [0x20000, 0x2fffd], [0x30000, 0x3fffd], [0xe0100, 0xe01ef],
+    [0xf0000, 0xffffd], [0x100000, 0x10fffd],
+];
+
+// Sorted list of non-overlapping intervals of East Asian Unambiguous characters
+// generated by the `./ranges.py` helper.
+lib.wc.unambiguous = [
+    [0x1100, 0x115f], [0x231a, 0x231b], [0x2329, 0x232a],
+    [0x23e9, 0x23ec], [0x23f0, 0x23f0], [0x23f3, 0x23f3],
+    [0x25fd, 0x25fe], [0x2614, 0x2615], [0x2648, 0x2653],
+    [0x267f, 0x267f], [0x2693, 0x2693], [0x26a1, 0x26a1],
+    [0x26aa, 0x26ab], [0x26bd, 0x26be], [0x26c4, 0x26c5],
+    [0x26ce, 0x26ce], [0x26d4, 0x26d4], [0x26ea, 0x26ea],
+    [0x26f2, 0x26f3], [0x26f5, 0x26f5], [0x26fa, 0x26fa],
+    [0x26fd, 0x26fd], [0x2705, 0x2705], [0x270a, 0x270b],
+    [0x2728, 0x2728], [0x274c, 0x274c], [0x274e, 0x274e],
+    [0x2753, 0x2755], [0x2757, 0x2757], [0x2795, 0x2797],
+    [0x27b0, 0x27b0], [0x27bf, 0x27bf], [0x2b1b, 0x2b1c],
+    [0x2b50, 0x2b50], [0x2b55, 0x2b55], [0x2e80, 0x2fdf],
+    [0x2ff0, 0x303e], [0x3040, 0x3247], [0x3250, 0x4dbf],
+    [0x4e00, 0xa4cf], [0xa960, 0xa97f], [0xac00, 0xd7a3],
+    [0xf900, 0xfaff], [0xfe10, 0xfe19], [0xfe30, 0xfe6f],
+    [0xff01, 0xff60], [0xffe0, 0xffe6], [0x16fe0, 0x16fe1],
+    [0x17000, 0x18aff], [0x1b000, 0x1b12f], [0x1b170, 0x1b2ff],
+    [0x1f004, 0x1f004], [0x1f0cf, 0x1f0cf], [0x1f18e, 0x1f18e],
+    [0x1f191, 0x1f19a], [0x1f200, 0x1f202], [0x1f210, 0x1f23b],
+    [0x1f240, 0x1f248], [0x1f250, 0x1f251], [0x1f260, 0x1f265],
+    [0x1f300, 0x1f320], [0x1f32d, 0x1f335], [0x1f337, 0x1f37c],
+    [0x1f37e, 0x1f393], [0x1f3a0, 0x1f3ca], [0x1f3cf, 0x1f3d3],
+    [0x1f3e0, 0x1f3f0], [0x1f3f4, 0x1f3f4], [0x1f3f8, 0x1f43e],
+    [0x1f440, 0x1f440], [0x1f442, 0x1f4fc], [0x1f4ff, 0x1f53d],
+    [0x1f54b, 0x1f54e], [0x1f550, 0x1f567], [0x1f57a, 0x1f57a],
+    [0x1f595, 0x1f596], [0x1f5a4, 0x1f5a4], [0x1f5fb, 0x1f64f],
+    [0x1f680, 0x1f6c5], [0x1f6cc, 0x1f6cc], [0x1f6d0, 0x1f6d2],
+    [0x1f6eb, 0x1f6ec], [0x1f6f4, 0x1f6f8], [0x1f910, 0x1f93e],
+    [0x1f940, 0x1f94c], [0x1f950, 0x1f96b], [0x1f980, 0x1f997],
+    [0x1f9c0, 0x1f9c0], [0x1f9d0, 0x1f9e6], [0x20000, 0x2fffd],
+    [0x30000, 0x3fffd],
 ];
 
 /**
- * Binary search to check if the given unicode character is a space character.
+ * Binary search to check if the given unicode character is in the table.
  *
- * @param {interger} ucs A unicode character code.
- *
- * @return {boolean} True if the given character is a space character; false
- *     otherwise.
+ * @param {integer} ucs A unicode character code.
+ * @param {Object} table A sorted list of internals to match against.
+ * @return {boolean} True if the given character is in the table.
  */
-lib.wc.isSpace = function(ucs) {
-  // Auxiliary function for binary search in interval table.
-  var min = 0, max = lib.wc.combining.length - 1;
+lib.wc.binaryTableSearch_ = function(ucs, table) {
+  var min = 0, max = table.length - 1;
   var mid;
 
-  if (ucs < lib.wc.combining[0][0] || ucs > lib.wc.combining[max][1])
+  if (ucs < table[min][0] || ucs > table[max][1])
     return false;
   while (max >= min) {
     mid = Math.floor((min + max) / 2);
-    if (ucs > lib.wc.combining[mid][1]) {
+    if (ucs > table[mid][1]) {
       min = mid + 1;
-    } else if (ucs < lib.wc.combining[mid][0]) {
+    } else if (ucs < table[mid][0]) {
       max = mid - 1;
     } else {
       return true;
@@ -4710,32 +5095,28 @@ lib.wc.isSpace = function(ucs) {
 };
 
 /**
+ * Binary search to check if the given unicode character is a space character.
+ *
+ * @param {integer} ucs A unicode character code.
+ *
+ * @return {boolean} True if the given character is a space character; false
+ *     otherwise.
+ */
+lib.wc.isSpace = function(ucs) {
+  return lib.wc.binaryTableSearch_(ucs, lib.wc.combining);
+};
+
+/**
  * Auxiliary function for checking if the given unicode character is a East
  * Asian Ambiguous character.
  *
- * @param {interger} ucs A unicode character code.
+ * @param {integer} ucs A unicode character code.
  *
  * @return {boolean} True if the given character is a East Asian Ambiguous
  * character.
  */
 lib.wc.isCjkAmbiguous = function(ucs) {
-  var min = 0, max = lib.wc.ambiguous.length - 1;
-  var mid;
-
-  if (ucs < lib.wc.ambiguous[0][0] || ucs > lib.wc.ambiguous[max][1])
-    return false;
-  while (max >= min) {
-    mid = Math.floor((min + max) / 2);
-    if (ucs > lib.wc.ambiguous[mid][1]) {
-      min = mid + 1;
-    } else if (ucs < lib.wc.ambiguous[mid][0]) {
-      max = mid - 1;
-    } else {
-      return true;
-    }
-  }
-
-  return false;
+  return lib.wc.binaryTableSearch_(ucs, lib.wc.ambiguous);
 };
 
 /**
@@ -4762,35 +5143,26 @@ lib.wc.charWidth = function(ucs) {
  * @return {integer} The column width of the given character.
  */
 lib.wc.charWidthDisregardAmbiguous = function(ucs) {
-  // Test for 8-bit control characters.
-  if (ucs === 0)
-    return lib.wc.nulWidth;
-  if (ucs < 32 || (ucs >= 0x7f && ucs < 0xa0))
-    return lib.wc.controlWidth;
-
   // Optimize for ASCII characters.
-  if (ucs < 0x7f)
-    return 1;
+  if (ucs < 0x7f) {
+    if (ucs >= 0x20)
+      return 1;
+    else if (ucs == 0)
+      return lib.wc.nulWidth;
+    else /* if (ucs < 0x20) */
+      return lib.wc.controlWidth;
+  }
+
+  // Test for 8-bit control characters.
+  if (ucs < 0xa0)
+    return lib.wc.controlWidth;
 
   // Binary search in table of non-spacing characters.
   if (lib.wc.isSpace(ucs))
     return 0;
 
-  // If we arrive here, ucs is not a combining or C0/C1 control character.
-  return 1 +
-    (ucs >= 0x1100 &&
-     (ucs <= 0x115f ||             // Hangul Jamo init. consonants
-      ucs == 0x2329 || ucs == 0x232a ||
-      (ucs >= 0x2e80 && ucs <= 0xa4cf &&
-       ucs != 0x303f) ||           // CJK ... Yi
-      (ucs >= 0xac00 && ucs <= 0xd7a3) ||  // Hangul Syllables
-      (ucs >= 0xf900 && ucs <= 0xfaff) ||  // CJK Compatibility Ideographs
-      (ucs >= 0xfe10 && ucs <= 0xfe19) ||  // Vertical forms
-      (ucs >= 0xfe30 && ucs <= 0xfe6f) ||  // CJK Compatibility Forms
-      (ucs >= 0xff00 && ucs <= 0xff60) ||  // Fullwidth Forms
-      (ucs >= 0xffe0 && ucs <= 0xffe6) ||
-      (ucs >= 0x20000 && ucs <= 0x2fffd) ||
-      (ucs >= 0x30000 && ucs <= 0x3fffd)));
+  // Binary search in table of wide characters.
+  return lib.wc.binaryTableSearch_(ucs, lib.wc.unambiguous) ? 2 : 1;
 };
 
 /**
@@ -4818,11 +5190,13 @@ lib.wc.charWidthRegardAmbiguous = function(ucs) {
 lib.wc.strWidth = function(str) {
   var width, rv = 0;
 
-  for (var i = 0; i < str.length; i++) {
-    width = lib.wc.charWidth(str.charCodeAt(i));
+  for (var i = 0; i < str.length;) {
+    var codePoint = str.codePointAt(i);
+    width = lib.wc.charWidth(codePoint);
     if (width < 0)
       return -1;
     rv += width;
+    i += (codePoint <= 0xffff) ? 1 : 2;
   }
 
   return rv;
@@ -4838,20 +5212,33 @@ lib.wc.strWidth = function(str) {
  * @return {string} The substring.
  */
 lib.wc.substr = function(str, start, opt_width) {
-  var startIndex, endIndex, width;
+  var startIndex = 0;
+  var endIndex, width;
 
-  for (startIndex = 0, width = 0; startIndex < str.length; startIndex++) {
-    width += lib.wc.charWidth(str.charCodeAt(startIndex));
-    if (width > start)
-      break;
+  // Fun edge case: Normally we associate zero width codepoints (like combining
+  // characters) with the previous codepoint, so we skip any leading ones while
+  // including trailing ones.  However, if there are zero width codepoints at
+  // the start of the string, and the substring starts at 0, lets include them
+  // in the result.  This also makes for a simple optimization for a common
+  // request.
+  if (start) {
+    for (width = 0; startIndex < str.length;) {
+      const codePoint = str.codePointAt(startIndex);
+      width += lib.wc.charWidth(codePoint);
+      if (width > start)
+        break;
+      startIndex += (codePoint <= 0xffff) ? 1 : 2;
+    }
   }
 
   if (opt_width != undefined) {
-    for (endIndex = startIndex, width = 0;
-         endIndex < str.length && width < opt_width;
-         width += lib.wc.charWidth(str.charCodeAt(endIndex)), endIndex++);
-    if (width > opt_width)
-      endIndex--;
+    for (endIndex = startIndex, width = 0; endIndex < str.length;) {
+      const codePoint = str.codePointAt(endIndex);
+      width += lib.wc.charWidth(codePoint);
+      if (width > opt_width)
+        break;
+      endIndex += (codePoint <= 0xffff) ? 1 : 2;
+    }
     return str.substring(startIndex, endIndex);
   }
 
@@ -4871,12 +5258,12 @@ lib.wc.substring = function(str, start, end) {
   return lib.wc.substr(str, start, end - start);
 };
 lib.resource.add('libdot/changelog/version', 'text/plain',
-'1.9' +
+'1.19' +
 ''
 );
 
 lib.resource.add('libdot/changelog/date', 'text/plain',
-'2014-05-27' +
+'2017-10-16' +
 ''
 );
 
@@ -4964,10 +5351,7 @@ lib.registerInit('hterm', function(onInit) {
   }
 
   if (!hterm.defaultStorage) {
-    var ary = navigator.userAgent.match(/\sChrome\/(\d\d)/);
-    var version = ary ? parseInt(ary[1]) : -1;
-    if (window.chrome && chrome.storage && chrome.storage.sync &&
-        version > 21) {
+    if (window.chrome && chrome.storage && chrome.storage.sync) {
       hterm.defaultStorage = new lib.Storage.Chrome(chrome.storage.sync);
     } else {
       hterm.defaultStorage = new lib.Storage.Local();
@@ -4979,7 +5363,7 @@ lib.registerInit('hterm', function(onInit) {
   var isPackagedApp = false;
   if (window.chrome && chrome.runtime && chrome.runtime.getManifest) {
     var manifest = chrome.runtime.getManifest();
-    var isPackagedApp = manifest.app && manifest.app.background;
+    isPackagedApp = manifest.app && manifest.app.background;
   }
 
   if (isPackagedApp) {
@@ -5034,15 +5418,53 @@ hterm.copySelectionToClipboard = function(document) {
 /**
  * Paste the system clipboard into the element with focus.
  *
+ * Note: In Chrome/Firefox app/extension environments, you'll need the
+ * "clipboardRead" permission.  In other environments, this might always
+ * fail as the browser frequently blocks access for security reasons.
+ *
  * @param {HTMLDocument} The document to paste into.
+ * @return {boolean} True if the paste succeeded.
  */
 hterm.pasteFromClipboard = function(document) {
   try {
-    document.execCommand('paste');
+    return document.execCommand('paste');
   } catch (firefoxException) {
-    // Ignore this. FF throws an exception if there was an error, even though
-    // the spec says just return false.
+    // Ignore this.  FF 40 and older would incorrectly throw an exception if
+    // there was an error instead of returning false.
+    return false;
   }
+};
+
+/**
+ * Create a new notification.
+ *
+ * @param {Object} params Various parameters for the notification.
+ * @param {string} params.title The title (defaults to the window's title).
+ * @param {string} params.body The message body (main text).
+ */
+hterm.notify = function(params) {
+  var def = (curr, fallback) => curr !== undefined ? curr : fallback;
+  if (params === undefined || params === null)
+    params = {};
+
+  // Merge the user's choices with the default settings.  We don't take it
+  // directly in case it was stuffed with excess junk.
+  var options = {
+      'body': params.body,
+      'icon': def(params.icon, lib.resource.getDataUrl('hterm/images/icon-96')),
+  }
+
+  var title = def(params.title, window.document.title);
+  if (!title)
+    title = 'hterm';
+  title = lib.f.replaceVars(hterm.desktopNotificationTitle, {'title': title});
+
+  var n = new Notification(title, options);
+  n.onclick = function() {
+    window.focus();
+    this.close();
+  };
+  return n;
 };
 
 /**
@@ -5093,7 +5515,7 @@ hterm.Size.prototype.setTo = function(that) {
  * Test if another hterm.Size instance is equal to this one.
  *
  * @param {hterm.Size} that The other hterm.Size instance.
- * @return {boolen} True if both instances have the same width/height, false
+ * @return {boolean} True if both instances have the same width/height, false
  *     otherwise.
  */
 hterm.Size.prototype.equals = function(that) {
@@ -5115,7 +5537,7 @@ hterm.Size.prototype.toString = function() {
  *
  * Instances of this class have public read/write members for row and column.
  *
- * This class includes an 'overflow' bit which is use to indicate that the an
+ * This class includes an 'overflow' bit which is use to indicate that an
  * attempt has been made to move the cursor column passed the end of the
  * screen.  When this happens we leave the cursor column set to the last column
  * of the screen but set the overflow bit.  In this state cursor movement
@@ -5172,7 +5594,7 @@ hterm.RowCol.prototype.setTo = function(that) {
  * Test if another hterm.RowCol instance is equal to this one.
  *
  * @param {hterm.RowCol} that The other hterm.RowCol instance.
- * @return {boolen} True if both instances have the same row/column, false
+ * @return {boolean} True if both instances have the same row/column, false
  *     otherwise.
  */
 hterm.RowCol.prototype.equals = function(that) {
@@ -5230,14 +5652,23 @@ hterm.Frame = function(terminal, url, opt_options) {
  * Handle messages from the iframe.
  */
 hterm.Frame.prototype.onMessage_ = function(e) {
-  if (e.data.name != 'ipc-init-ok') {
-    console.log('Unknown message from frame:', e.data);
-    return;
+  switch (e.data.name) {
+    case 'ipc-init-ok':
+      // We get this response after we send them ipc-init and they finish.
+      this.sendTerminalInfo_();
+      return;
+    case 'terminal-info-ok':
+      // We get this response after we send them terminal-info and they finish.
+      // Show the finished frame, and then rebind our message handler to the
+      // callback below.
+      this.container_.style.display = 'flex';
+      this.messageChannel_.port1.onmessage = this.onMessage.bind(this);
+      this.onLoad();
+      return;
+    default:
+      console.log('Unknown message from frame:', e.data);
+      return;
   }
-
-  this.sendTerminalInfo_();
-  this.messageChannel_.port1.onmessage = this.onMessage.bind(this);
-  this.onLoad();
 };
 
 /**
@@ -5257,7 +5688,7 @@ hterm.Frame.prototype.onLoad_ = function() {
   this.messageChannel_.port1.start();
   this.iframe_.contentWindow.postMessage(
       {name: 'ipc-init', argv: [{messagePort: this.messageChannel_.port2}]},
-      [this.messageChannel_.port2], this.url);
+      this.url, [this.messageChannel_.port2]);
 };
 
 /**
@@ -5353,28 +5784,30 @@ hterm.Frame.prototype.show = function() {
   var container = this.container_ = document.createElement('div');
   container.style.cssText = (
       'position: absolute;' +
-      'display: -webkit-flex;' +
-      '-webkit-flex-direction: column;' +
+      'display: none;' +
+      'flex-direction: column;' +
       'top: 10%;' +
       'left: 4%;' +
       'width: 90%;' +
       'height: 80%;' +
+      'min-height: 20%;' +
+      'max-height: 80%;' +
       'box-shadow: 0 0 2px ' + this.terminal_.getForegroundColor() + ';' +
       'border: 2px ' + this.terminal_.getForegroundColor() + ' solid;');
 
-  var header = document.createElement('div');
-  header.style.cssText = (
-      'display: -webkit-flex;' +
-      '-webkit-justify-content: flex-end;' +
-      'height: ' + headerHeight + ';' +
-      'background-color: ' + this.terminal_.getForegroundColor() + ';' +
-      'color: ' + this.terminal_.getBackgroundColor() + ';' +
-      'font-size: 16px;' +
-      'font-family: ' + this.terminal_.getFontFamily());
-  container.appendChild(header);
-
   if (false) {
-    // No use for the close button.
+    // No use for the close button, so no use for the window header either.
+    var header = document.createElement('div');
+    header.style.cssText = (
+        'display: flex;' +
+        'justify-content: flex-end;' +
+        'height: ' + headerHeight + ';' +
+        'background-color: ' + this.terminal_.getForegroundColor() + ';' +
+        'color: ' + this.terminal_.getBackgroundColor() + ';' +
+        'font-size: 16px;' +
+        'font-family: ' + this.terminal_.getFontFamily());
+    container.appendChild(header);
+
     var button = document.createElement('div');
     button.setAttribute('role', 'button');
     button.style.cssText = (
@@ -5389,8 +5822,8 @@ hterm.Frame.prototype.show = function() {
   var iframe = this.iframe_ = document.createElement('iframe');
   iframe.onload = this.onLoad_.bind(this);
   iframe.style.cssText = (
-      'display: -webkit-flex;' +
-      '-webkit-flex: 1;' +
+      'display: flex;' +
+      'flex: 1;' +
       'width: 100%');
   iframe.setAttribute('src', this.url);
   iframe.setAttribute('seamless', true);
@@ -5427,7 +5860,7 @@ hterm.Keyboard = function(terminal) {
   // The event handlers we are interested in, and their bound callbacks, saved
   // so they can be uninstalled with removeEventListener, when required.
   this.handlers_ = [
-      ['blur', this.onBlur_.bind(this)],
+      ['focusout', this.onFocusOut_.bind(this)],
       ['keydown', this.onKeyDown_.bind(this)],
       ['keypress', this.onKeyPress_.bind(this)],
       ['keyup', this.onKeyUp_.bind(this)],
@@ -5438,6 +5871,16 @@ hterm.Keyboard = function(terminal) {
    * The current key map.
    */
   this.keyMap = new hterm.Keyboard.KeyMap(this);
+
+  this.bindings = new hterm.Keyboard.Bindings(this);
+
+  /**
+   * none: Disable any AltGr related munging.
+   * ctrl-alt: Assume Ctrl+Alt means AltGr.
+   * left-alt: Assume left Alt means AltGr.
+   * right-alt: Assume right Alt means AltGr.
+   */
+  this.altGrMode = 'none';
 
   /**
    * If true, Shift-Insert will fall through to the browser as a paste.
@@ -5542,21 +5985,30 @@ hterm.Keyboard = function(terminal) {
    * that it's impossible to do meta-backspace. If the user enables this pref,
    * we use a trick to tell a true DEL keypress from alt-backspace: on
    * alt-backspace, we will see the alt key go down, then get a DEL keystroke
-   * that indicates that alt is not pressed. See http://crbug.com/174410 .
+   * that indicates that alt is not pressed. See https://crbug.com/174410 .
    */
   this.altBackspaceIsMetaBackspace = false;
 
   /**
    * Used to keep track of the current alt-key state, which is necessary for
-   * the altBackspaceIsMetaBackspace preference above.
+   * the altBackspaceIsMetaBackspace preference above and for the altGrMode
+   * preference.  This is a bitmap with where bit positions correspond to the
+   * "location" property of the key event.
    */
-  this.altIsPressed = false;
+  this.altKeyPressed = 0;
 
   /**
    * If true, Chrome OS media keys will be mapped to their F-key equivalent.
    * E.g. "Back" will be mapped to F1. If false, Chrome will handle the keys.
    */
   this.mediaKeysAreFKeys = false;
+
+  /**
+   * Holds the previous setting of altSendsWhat when DECSET 1039 is used. When
+   * DECRST 1039 is used, altSendsWhat is changed back to this and this is
+   * nulled out.
+   */
+  this.previousAltSendsWhat_ = null;
 };
 
 /**
@@ -5567,7 +6019,7 @@ hterm.Keyboard.KeyActions = {
    * Call preventDefault and stopPropagation for this key event and nothing
    * else.
    */
-  CANCEL: new String('CANCEL'),
+  CANCEL: lib.f.createEnum('CANCEL'),
 
   /**
    * This performs the default terminal action for the key.  If used in the
@@ -5593,13 +6045,13 @@ hterm.Keyboard.KeyActions = {
    *  - If meta is down and configured to send an escape, '\x1b' will be sent
    *    before the normal action is performed.
    */
-  DEFAULT: new String('DEFAULT'),
+  DEFAULT: lib.f.createEnum('DEFAULT'),
 
   /**
    * Causes the terminal to opt out of handling the key event, instead letting
    * the browser deal with it.
    */
-  PASS: new String('PASS'),
+  PASS: lib.f.createEnum('PASS'),
 
   /**
    * Insert the first or second character of the keyCap, based on e.shiftKey.
@@ -5609,7 +6061,7 @@ hterm.Keyboard.KeyActions = {
    * It is useful for a modified key action, where it essentially strips the
    * modifier while preventing the browser from reacting to the key.
    */
-  STRIP: new String('STRIP')
+  STRIP: lib.f.createEnum('STRIP')
 };
 
 /**
@@ -5664,14 +6116,16 @@ hterm.Keyboard.prototype.uninstallKeyboard = function() {
 /**
  * Handle onTextInput events.
  *
- * We're not actually supposed to get these, but we do on the Mac in the case
- * where a third party app sends synthetic keystrokes to Chrome.
+ * These are generated when using IMEs, Virtual Keyboards (VKs), compose keys,
+ * Unicode input, etc...
  */
 hterm.Keyboard.prototype.onTextInput_ = function(e) {
   if (!e.data)
     return;
 
-  e.data.split('').forEach(this.terminal.onVTKeystroke.bind(this.terminal));
+  // Just pass the generated buffer straight down.  No need for us to split it
+  // up or otherwise parse it ahead of times.
+  this.terminal.onVTKeystroke(e.data);
 };
 
 /**
@@ -5684,7 +6138,7 @@ hterm.Keyboard.prototype.onKeyPress_ = function(e) {
   var lowerKey = key.toLowerCase();
   if ((e.ctrlKey || e.metaKey) && (lowerKey == 'c' || lowerKey == 'v')) {
     // On FF the key press (not key down) event gets fired for copy/paste.
-    // Let it fall through for the default browser behaviour.
+    // Let it fall through for the default browser behavior.
     return;
   }
 
@@ -5712,13 +6166,30 @@ hterm.Keyboard.prototype.onKeyPress_ = function(e) {
   e.stopPropagation();
 };
 
-hterm.Keyboard.prototype.onBlur_ = function(e) {
-  this.altIsPressed = false;
+/**
+ * Prevent default handling for non-ctrl-shifted event.
+ *
+ * When combined with Chrome permission 'app.window.fullscreen.overrideEsc',
+ * and called for both key down and key up events,
+ * the ESC key remains usable within fullscreen Chrome app windows.
+ */
+hterm.Keyboard.prototype.preventChromeAppNonCtrlShiftDefault_ = function(e) {
+  if (!window.chrome || !window.chrome.app || !window.chrome.app.window)
+    return;
+  if (!e.ctrlKey || !e.shiftKey)
+    e.preventDefault();
+};
+
+hterm.Keyboard.prototype.onFocusOut_ = function(e) {
+  this.altKeyPressed = 0;
 };
 
 hterm.Keyboard.prototype.onKeyUp_ = function(e) {
   if (e.keyCode == 18)
-    this.altIsPressed = false;
+    this.altKeyPressed = this.altKeyPressed & ~(1 << (e.location - 1));
+
+  if (e.keyCode == 27)
+    this.preventChromeAppNonCtrlShiftDefault_(e);
 };
 
 /**
@@ -5726,7 +6197,10 @@ hterm.Keyboard.prototype.onKeyUp_ = function(e) {
  */
 hterm.Keyboard.prototype.onKeyDown_ = function(e) {
   if (e.keyCode == 18)
-    this.altIsPressed = true;
+    this.altKeyPressed = this.altKeyPressed | (1 << (e.location - 1));
+
+  if (e.keyCode == 27)
+    this.preventChromeAppNonCtrlShiftDefault_(e);
 
   var keyDef = this.keyMap.keyDefs[e.keyCode];
   if (!keyDef) {
@@ -5756,7 +6230,7 @@ hterm.Keyboard.prototype.onKeyDown_ = function(e) {
   }
 
   // Note that we use the triple-equals ('===') operator to test equality for
-  // these constants, in order to distingush usage of the constant from usage
+  // these constants, in order to distinguish usage of the constant from usage
   // of a literal string that happens to contain the same bytes.
   var CANCEL = hterm.Keyboard.KeyActions.CANCEL;
   var DEFAULT = hterm.Keyboard.KeyActions.DEFAULT;
@@ -5766,6 +6240,34 @@ hterm.Keyboard.prototype.onKeyDown_ = function(e) {
   var control = e.ctrlKey;
   var alt = this.altIsMeta ? false : e.altKey;
   var meta = this.altIsMeta ? (e.altKey || e.metaKey) : e.metaKey;
+
+  // In the key-map, we surround the keyCap for non-printables in "[...]"
+  var isPrintable = !(/^\[\w+\]$/.test(keyDef.keyCap));
+
+  switch (this.altGrMode) {
+    case 'ctrl-alt':
+    if (isPrintable && control && alt) {
+      // ctrl-alt-printable means altGr.  We clear out the control and
+      // alt modifiers and wait to see the charCode in the keydown event.
+      control = false;
+      alt = false;
+    }
+    break;
+
+    case 'right-alt':
+    if (isPrintable && (this.terminal.keyboard.altKeyPressed & 2)) {
+      control = false;
+      alt = false;
+    }
+    break;
+
+    case 'left-alt':
+    if (isPrintable && (this.terminal.keyboard.altKeyPressed & 1)) {
+      control = false;
+      alt = false;
+    }
+    break;
+  }
 
   var action;
 
@@ -5779,9 +6281,32 @@ hterm.Keyboard.prototype.onKeyDown_ = function(e) {
     action = getAction('normal');
   }
 
-  // The action may have cleared the e.shiftKey, so we wait until after
-  // getAction to read it.
-  var shift = e.shiftKey;
+  // If e.maskShiftKey was set (during getAction) it means the shift key is
+  // already accounted for in the action, and we should not act on it any
+  // further. This is currently only used for Ctrl-Shift-Tab, which should send
+  // "CSI Z", not "CSI 1 ; 2 Z".
+  var shift = !e.maskShiftKey && e.shiftKey;
+
+  var keyDown = {
+    keyCode: e.keyCode,
+    shift: e.shiftKey, // not `var shift` from above.
+    ctrl: control,
+    alt: alt,
+    meta: meta
+  };
+
+  var binding = this.bindings.getBinding(keyDown);
+
+  if (binding) {
+    // Clear out the modifier bits so we don't try to munge the sequence
+    // further.
+    shift = control = alt = meta = false;
+    resolvedActionType = 'normal';
+    action = binding.action;
+
+    if (typeof action == 'function')
+      action = action.call(this, this.terminal, keyDown);
+  }
 
   if (alt && this.altSendsWhat == 'browser-key' && action == DEFAULT) {
     // When altSendsWhat is 'browser-key', we wait for the keypress event.
@@ -5811,7 +6336,7 @@ hterm.Keyboard.prototype.onKeyDown_ = function(e) {
       action = action.apply(this.keyMap, [e, keyDef]);
 
     if (action == DEFAULT && keyDef.keyCap.length == 2)
-      action = keyDef.keyCap.substr((e.shiftKey ? 1 : 0), 1);
+      action = keyDef.keyCap.substr((shift ? 1 : 0), 1);
   }
 
   e.preventDefault();
@@ -5835,28 +6360,22 @@ hterm.Keyboard.prototype.onKeyDown_ = function(e) {
     meta = false;
   }
 
-  if (action.substr(0, 2) == '\x1b[' && (alt || control || shift)) {
+  if (action.substr(0, 2) == '\x1b[' && (alt || control || shift || meta)) {
     // The action is an escape sequence that and it was triggered in the
     // presence of a keyboard modifier, we may need to alter the action to
     // include the modifier before sending it.
 
-    var mod;
-
-    if (shift && !(alt || control)) {
-      mod = ';2';
-    } else if (alt && !(shift || control)) {
-      mod = ';3';
-    } else if (shift && alt && !control) {
-      mod = ';4';
-    } else if (control && !(shift || alt)) {
-      mod = ';5';
-    } else if (shift && control && !alt) {
-      mod = ';6';
-    } else if (alt && control && !shift) {
-      mod = ';7';
-    } else if (shift && alt && control) {
-      mod = ';8';
-    }
+    // The math is funky but aligns w/xterm.
+    let imod = 1;
+    if (shift)
+      imod += 1;
+    if (alt)
+      imod += 2;
+    if (control)
+      imod += 4;
+    if (meta)
+      imod += 8;
+    let mod = ';' + imod;
 
     if (action.length == 3) {
       // Some of the CSI sequences have zero parameters unless modified.
@@ -5869,7 +6388,7 @@ hterm.Keyboard.prototype.onKeyDown_ = function(e) {
 
   } else {
     if (action === DEFAULT) {
-      action = keyDef.keyCap.substr((e.shiftKey ? 1 : 0), 1);
+      action = keyDef.keyCap.substr((shift ? 1 : 0), 1);
 
       if (control) {
         var unshifted = keyDef.keyCap.substr(0, 1);
@@ -5895,6 +6414,182 @@ hterm.Keyboard.prototype.onKeyDown_ = function(e) {
   }
 
   this.terminal.onVTKeystroke(action);
+};
+// SOURCE FILE: hterm/js/hterm_keyboard_bindings.js
+// Copyright (c) 2015 The Chromium OS Authors. All rights reserved.
+// Use of this source code is governed by a BSD-style license that can be
+// found in the LICENSE file.
+
+'use strict';
+
+/**
+ * A mapping from hterm.Keyboard.KeyPattern to an action.
+ *
+ * TODO(rginda): For now this bindings code is only used for user overrides.
+ * hterm.Keyboard.KeyMap still handles all of the built-in key mappings.
+ * It'd be nice if we migrated that over to be hterm.Keyboard.Bindings based.
+ */
+hterm.Keyboard.Bindings = function() {
+  this.bindings_ = {};
+};
+
+/**
+ * Remove all bindings.
+ */
+hterm.Keyboard.Bindings.prototype.clear = function () {
+  this.bindings_ = {};
+};
+
+/**
+ * Add a new binding.
+ *
+ * Internal API that assumes parsed objects as inputs.
+ * See the public addBinding for more details.
+ *
+ * @param {hterm.Keyboard.KeyPattern} keyPattern
+ * @param {string|function|hterm.Keyboard.KeyAction} action
+ */
+hterm.Keyboard.Bindings.prototype.addBinding_ = function(keyPattern, action) {
+  var binding = null;
+  var list = this.bindings_[keyPattern.keyCode];
+  if (list) {
+    for (var i = 0; i < list.length; i++) {
+      if (list[i].keyPattern.matchKeyPattern(keyPattern)) {
+        binding = list[i];
+        break;
+      }
+    }
+  }
+
+  if (binding) {
+    binding.action = action;
+  } else {
+    binding = {keyPattern: keyPattern, action: action};
+
+    if (!list) {
+      this.bindings_[keyPattern.keyCode] = [binding];
+    } else {
+      this.bindings_[keyPattern.keyCode].push(binding);
+
+      list.sort(function(a, b) {
+        return hterm.Keyboard.KeyPattern.sortCompare(
+            a.keyPattern, b.keyPattern);
+      });
+    }
+  }
+};
+
+/**
+ * Add a new binding.
+ *
+ * If a binding for the keyPattern already exists it will be overridden.
+ *
+ * More specific keyPatterns take precedence over those with wildcards.  Given
+ * bindings for "Ctrl-A" and "Ctrl-*-A", and a "Ctrl-A" keydown, the "Ctrl-A"
+ * binding will match even if "Ctrl-*-A" was created last.
+ *
+ * If action is a string, it will be passed through hterm.Parser.parseKeyAction.
+ *
+ * For example:
+ *   // Will replace Ctrl-P keystrokes with the string "hiya!".
+ *   addBinding('Ctrl-P', "'hiya!'");
+ *   // Will cancel the keystroke entirely (make it do nothing).
+ *   addBinding('Alt-D', hterm.Keyboard.KeyActions.CANCEL);
+ *   // Will execute the code and return the action.
+ *   addBinding('Ctrl-T', function() {
+ *     console.log('Got a T!');
+ *     return hterm.Keyboard.KeyActions.PASS;
+ *   });
+ *
+ * @param {string|hterm.Keyboard.KeyPattern} keyPattern
+ * @param {string|function|hterm.Keyboard.KeyAction} action
+ */
+hterm.Keyboard.Bindings.prototype.addBinding = function(key, action) {
+  // If we're given a hterm.Keyboard.KeyPattern object, pass it down.
+  if (typeof key != 'string') {
+    this.addBinding_(key, action);
+    return;
+  }
+
+  // Here we treat key as a string.
+  var p = new hterm.Parser();
+
+  p.reset(key);
+  var sequence;
+
+  try {
+    sequence = p.parseKeySequence();
+  } catch (ex) {
+    console.error(ex);
+    return;
+  }
+
+  if (!p.isComplete()) {
+    console.error(p.error('Expected end of sequence: ' + sequence));
+    return;
+  }
+
+  // If action is a string, parse it.  Otherwise assume it's callable.
+  if (typeof action == 'string') {
+    p.reset(action);
+    try {
+      action = p.parseKeyAction();
+    } catch (ex) {
+      console.error(ex);
+      return;
+    }
+  }
+
+  if (!p.isComplete()) {
+    console.error(p.error('Expected end of sequence: ' + sequence));
+    return;
+  }
+
+  this.addBinding_(new hterm.Keyboard.KeyPattern(sequence), action);
+};
+
+/**
+ * Add multiple bindings at a time using a map of {string: string, ...}
+ *
+ * This uses hterm.Parser to parse the maps key into KeyPatterns, and the
+ * map values into {string|function|KeyAction}.
+ *
+ * For example:
+ *  {
+ *    // Will replace Ctrl-P keystrokes with the string "hiya!".
+ *    'Ctrl-P': "'hiya!'",
+ *    // Will cancel the keystroke entirely (make it do nothing).
+ *    'Alt-D': hterm.Keyboard.KeyActions.CANCEL,
+ *  }
+ *
+ * @param {Object} map
+ */
+hterm.Keyboard.Bindings.prototype.addBindings = function(map) {
+  for (var key in map) {
+    this.addBinding(key, map[key]);
+  }
+};
+
+/**
+ * Return the binding that is the best match for the given keyDown record,
+ * or null if there is no match.
+ *
+ * @param {Object} keyDown An object with a keyCode property and zero or
+ *   more boolean properties representing key modifiers.  These property names
+ *   must match those defined in hterm.Keyboard.KeyPattern.modifiers.
+ */
+hterm.Keyboard.Bindings.prototype.getBinding = function(keyDown) {
+  var list = this.bindings_[keyDown.keyCode];
+  if (!list)
+    return null;
+
+  for (var i = 0; i < list.length; i++) {
+    var binding = list[i];
+    if (binding.keyPattern.matchKeyDown(keyDown))
+      return binding;
+  }
+
+  return null;
 };
 // SOURCE FILE: hterm/js/hterm_keyboard_keymap.js
 // Copyright (c) 2012 The Chromium OS Authors. All rights reserved.
@@ -5973,7 +6668,7 @@ hterm.Keyboard.KeyMap.prototype.addKeyDef = function(keyCode, def) {
 };
 
 /**
- * Add mutiple key definitions in a single call.
+ * Add multiple key definitions in a single call.
  *
  * This function takes the key definitions as variable argument list.  Each
  * argument is the key definition specified as an array.
@@ -5998,13 +6693,6 @@ hterm.Keyboard.KeyMap.prototype.addKeyDefs = function(var_args) {
 };
 
 /**
- * Inherit from hterm.Keyboard.KeyMap, as defined in keyboard.js.
- */
-hterm.Keyboard.KeyMap.prototype = {
-  __proto__: hterm.Keyboard.KeyMap.prototype
-};
-
-/**
  * Set up the default state for this keymap.
  */
 hterm.Keyboard.KeyMap.prototype.reset = function() {
@@ -6012,7 +6700,7 @@ hterm.Keyboard.KeyMap.prototype.reset = function() {
 
   var self = this;
 
-  // This function us used by the "macro" functions below.  It makes it
+  // This function is used by the "macro" functions below.  It makes it
   // possible to use the call() macro as an argument to any other macro.
   function resolve(action, e, k) {
     if (typeof action == 'function')
@@ -6028,7 +6716,7 @@ hterm.Keyboard.KeyMap.prototype.reset = function() {
       var action = (e.shiftKey || e.ctrlKey || e.altKey || e.metaKey ||
                     !self.keyboard.applicationKeypad) ? a : b;
       return resolve(action, e, k);
-    }
+    };
   }
 
   // If mod or not application cursor a, else b.  The keys that care about
@@ -6038,45 +6726,40 @@ hterm.Keyboard.KeyMap.prototype.reset = function() {
       var action = (e.shiftKey || e.ctrlKey || e.altKey || e.metaKey ||
                     !self.keyboard.applicationCursor) ? a : b;
       return resolve(action, e, k);
-    }
+    };
   }
 
   // If not backspace-sends-backspace keypad a, else b.
   function bs(a, b) {
     return function(e, k) {
-      var action = !self.keyboard.backspaceSendsBackspace ? a : b
+      var action = !self.keyboard.backspaceSendsBackspace ? a : b;
       return resolve(action, e, k);
-    }
+    };
   }
 
   // If not e.shiftKey a, else b.
   function sh(a, b) {
     return function(e, k) {
-      var action = !e.shiftKey ? a : b
-
-      // Clear e.shiftKey so that the keyboard code doesn't try to apply
-      // additional modifiers to the sequence.
-      delete e.shiftKey;
-      e.shiftKey = false;
-
+      var action = !e.shiftKey ? a : b;
+      e.maskShiftKey = true;
       return resolve(action, e, k);
-    }
+    };
   }
 
   // If not e.altKey a, else b.
   function alt(a, b) {
     return function(e, k) {
-      var action = !e.altKey ? a : b
+      var action = !e.altKey ? a : b;
       return resolve(action, e, k);
-    }
+    };
   }
 
   // If no modifiers a, else b.
   function mod(a, b) {
-    return function (e, k) {
+    return function(e, k) {
       var action = !(e.shiftKey || e.ctrlKey || e.altKey || e.metaKey) ? a : b;
       return resolve(action, e, k);
-    }
+    };
   }
 
   // Compute a control character for a given character.
@@ -6085,11 +6768,15 @@ hterm.Keyboard.KeyMap.prototype.reset = function() {
   // Call a method on the keymap instance.
   function c(m) { return function (e, k) { return this[m](e, k) } }
 
-  // Ignore if not trapping media keys
+  // Ignore if not trapping media keys.
   function med(fn) {
     return function(e, k) {
       if (!self.keyboard.mediaKeysAreFKeys) {
-        return hterm.Keyboard.KeyActions.PASS;
+        // Block Back, Forward, and Reload keys to avoid navigating away from
+        // the current page.
+        return (e.keyCode == 166 || e.keyCode == 167 || e.keyCode == 168) ?
+            hterm.Keyboard.KeyActions.CANCEL :
+            hterm.Keyboard.KeyActions.PASS;
       }
       return resolve(fn, e, k);
     };
@@ -6197,11 +6884,12 @@ hterm.Keyboard.KeyMap.prototype.reset = function() {
     [191, '/?',   DEFAULT, sh(ctl('_'), ctl('?')), DEFAULT, DEFAULT],
 
     // Sixth and final row.
-    [17,  '[CTRL]', PASS,    PASS,     PASS,    PASS],
-    [18,  '[ALT]',  PASS,    PASS,     PASS,    PASS],
-    [91,  '[LAPL]', PASS,    PASS,     PASS,    PASS],
-    [32,  ' ',      DEFAULT, ctl('@'), DEFAULT, DEFAULT],
-    [92,  '[RAPL]', PASS,    PASS,     PASS,    PASS],
+    [17,  '[CTRL]',  PASS,    PASS,     PASS,    PASS],
+    [18,  '[ALT]',   PASS,    PASS,     PASS,    PASS],
+    [91,  '[LAPL]',  PASS,    PASS,     PASS,    PASS],
+    [32,  ' ',       DEFAULT, ctl('@'), DEFAULT, DEFAULT],
+    [92,  '[RAPL]',  PASS,    PASS,     PASS,    PASS],
+    [93,  '[RMENU]', PASS,    PASS,     PASS,    PASS],
 
     // These things.
     [42,  '[PRTSCR]', PASS, PASS, PASS, PASS],
@@ -6218,8 +6906,8 @@ hterm.Keyboard.KeyMap.prototype.reset = function() {
 
     // Arrow keys.  When unmodified they respect the application cursor state,
     // otherwise they always send the CSI codes.
-    [38, '[UP]',    ac(CSI + 'A', SS3 + 'A'), DEFAULT, DEFAULT, DEFAULT],
-    [40, '[DOWN]',  ac(CSI + 'B', SS3 + 'B'), DEFAULT, DEFAULT, DEFAULT],
+    [38, '[UP]',    c('onKeyArrowUp_'), DEFAULT, DEFAULT, DEFAULT],
+    [40, '[DOWN]',  c('onKeyArrowDown_'), DEFAULT, DEFAULT, DEFAULT],
     [39, '[RIGHT]', ac(CSI + 'C', SS3 + 'C'), DEFAULT, DEFAULT, DEFAULT],
     [37, '[LEFT]',  ac(CSI + 'D', SS3 + 'D'), DEFAULT, DEFAULT, DEFAULT],
 
@@ -6239,8 +6927,8 @@ hterm.Keyboard.KeyMap.prototype.reset = function() {
     [103, '[KP7]', DEFAULT, DEFAULT, DEFAULT, DEFAULT],
     [104, '[KP8]', DEFAULT, DEFAULT, DEFAULT, DEFAULT],
     [105, '[KP9]', DEFAULT, DEFAULT, DEFAULT, DEFAULT],
-    [107, '[KP+]', DEFAULT, DEFAULT, DEFAULT, DEFAULT],
-    [109, '[KP-]', DEFAULT, DEFAULT, DEFAULT, DEFAULT],
+    [107, '[KP+]', DEFAULT, c('onPlusMinusZero_'), DEFAULT, c('onPlusMinusZero_')],
+    [109, '[KP-]', DEFAULT, c('onPlusMinusZero_'), DEFAULT, c('onPlusMinusZero_')],
     [106, '[KP*]', DEFAULT, DEFAULT, DEFAULT, DEFAULT],
     [111, '[KP/]', DEFAULT, DEFAULT, DEFAULT, DEFAULT],
     [110, '[KP.]', DEFAULT, DEFAULT, DEFAULT, DEFAULT],
@@ -6325,7 +7013,7 @@ hterm.Keyboard.KeyMap.prototype.onKeyPageUp_ = function(e) {
  */
 hterm.Keyboard.KeyMap.prototype.onKeyDel_ = function(e) {
   if (this.keyboard.altBackspaceIsMetaBackspace &&
-      this.keyboard.altIsPressed && !e.altKey)
+      this.keyboard.altKeyPressed && !e.altKey)
     return '\x1b\x7f';
   return '\x1b[3~';
 };
@@ -6339,6 +7027,32 @@ hterm.Keyboard.KeyMap.prototype.onKeyPageDown_ = function(e) {
 
   this.keyboard.terminal.scrollPageDown();
   return hterm.Keyboard.KeyActions.CANCEL;
+};
+
+/**
+ * Either scroll the scrollback buffer or send a key sequence.
+ */
+hterm.Keyboard.KeyMap.prototype.onKeyArrowUp_ = function(e) {
+  if (!this.keyboard.applicationCursor && e.shiftKey) {
+    this.keyboard.terminal.scrollLineUp();
+    return hterm.Keyboard.KeyActions.CANCEL;
+  }
+
+  return (e.shiftKey || e.ctrlKey || e.altKey || e.metaKey ||
+          !this.keyboard.applicationCursor) ? '\x1b[A' : '\x1bOA';
+};
+
+/**
+ * Either scroll the scrollback buffer or send a key sequence.
+ */
+hterm.Keyboard.KeyMap.prototype.onKeyArrowDown_ = function(e) {
+  if (!this.keyboard.applicationCursor && e.shiftKey) {
+    this.keyboard.terminal.scrollLineDown();
+    return hterm.Keyboard.KeyActions.CANCEL;
+  }
+
+  return (e.shiftKey || e.ctrlKey || e.altKey || e.metaKey ||
+          !this.keyboard.applicationCursor) ? '\x1b[B' : '\x1bOB';
 };
 
 /**
@@ -6445,17 +7159,24 @@ hterm.Keyboard.KeyMap.prototype.onCtrlN_ = function(e, keyDef) {
 };
 
 /**
- * Either send a ^V or allow the browser to interpret the keystroke as a paste
- * command.
+ * Either send a ^V or issue a paste command.
  *
  * The default behavior is to paste if the user presses Ctrl-Shift-V, and send
  * a ^V if the user presses Ctrl-V. This can be flipped with the
  * 'ctrl-v-paste' preference.
+ *
  */
 hterm.Keyboard.KeyMap.prototype.onCtrlV_ = function(e, keyDef) {
   if ((!e.shiftKey && this.keyboard.ctrlVPaste) ||
       (e.shiftKey && !this.keyboard.ctrlVPaste)) {
-    return hterm.Keyboard.KeyActions.PASS;
+    // We try to do the pasting ourselves as not all browsers/OSs bind Ctrl-V to
+    // pasting.  Notably, on macOS, Ctrl-V/Ctrl-Shift-V do nothing.
+    // However, this might run into web restrictions, so if it fails, we still
+    // fallback to the letting the native behavior (hopefully) save us.
+    if (this.keyboard.terminal.paste())
+      return hterm.Keyboard.KeyActions.CANCEL;
+    else
+      return hterm.Keyboard.KeyActions.PASS;
   }
 
   return '\x16';
@@ -6552,7 +7273,7 @@ hterm.Keyboard.KeyMap.prototype.onPlusMinusZero_ = function(e, keyDef) {
   } else {
     var size = this.keyboard.terminal.getFontSize();
 
-    if (cap == '-') {
+    if (cap == '-' || keyDef.keyCap == '[KP-]') {
       size -= 1;
     } else {
       size += 1;
@@ -6562,6 +7283,104 @@ hterm.Keyboard.KeyMap.prototype.onPlusMinusZero_ = function(e, keyDef) {
   }
 
   return hterm.Keyboard.KeyActions.CANCEL;
+};
+// SOURCE FILE: hterm/js/hterm_keyboard_keypattern.js
+// Copyright (c) 2015 The Chromium OS Authors. All rights reserved.
+// Use of this source code is governed by a BSD-style license that can be
+// found in the LICENSE file.
+
+'use strict';
+
+/**
+ * A record of modifier bits and keycode used to define a key binding.
+ *
+ * The modifier names are enumerated in the static KeyPattern.modifiers
+ * property below.  Each modifier can be true, false, or "*".  True means
+ * the modifier key must be present, false means it must not, and "*" means
+ * it doesn't matter.
+ */
+hterm.Keyboard.KeyPattern = function(spec) {
+  this.wildcardCount = 0;
+  this.keyCode = spec.keyCode;
+
+  hterm.Keyboard.KeyPattern.modifiers.forEach(function(mod) {
+    this[mod] = spec[mod] || false;
+    if (this[mod] == '*')
+      this.wildcardCount++;
+  }.bind(this));
+};
+
+/**
+ * Valid modifier names.
+ */
+hterm.Keyboard.KeyPattern.modifiers = [
+  'shift', 'ctrl', 'alt', 'meta'
+];
+
+/**
+ * A compare callback for Array.prototype.sort().
+ *
+ * The bindings code wants to be sure to search through the strictest key
+ * patterns first, so that loosely defined patterns have a lower priority than
+ * exact patterns.
+ *
+ * @param {hterm.Keyboard.KeyPattern} a
+ * @param {hterm.Keyboard.KeyPattern} b
+ */
+hterm.Keyboard.KeyPattern.sortCompare = function(a, b) {
+  if (a.wildcardCount < b.wildcardCount)
+    return -1;
+
+  if (a.wildcardCount > b.wildcardCount)
+    return 1;
+
+  return 0;
+};
+
+/**
+ * Private method used to match this key pattern against other key patterns
+ * or key down events.
+ *
+ * @param {Object} The object to match.
+ * @param {boolean} True if we should ignore wildcards.  Useful when you want
+ *   to perform and exact match against another key pattern.
+ */
+hterm.Keyboard.KeyPattern.prototype.match_ = function(obj, exactMatch) {
+  if (this.keyCode != obj.keyCode)
+    return false;
+
+  var rv = true;
+
+  hterm.Keyboard.KeyPattern.modifiers.forEach(function(mod) {
+    var modValue = (mod in obj) ? obj[mod] : false;
+    if (!rv || (!exactMatch && this[mod] == '*') || this[mod] == modValue)
+      return;
+
+    rv = false;
+  }.bind(this));
+
+  return rv;
+};
+
+/**
+ * Return true if the given keyDown object is a match for this key pattern.
+ *
+ * @param {Object} keyDown An object with a keyCode property and zero or
+ *   more boolean properties representing key modifiers.  These property names
+ *   must match those defined in hterm.Keyboard.KeyPattern.modifiers.
+ */
+hterm.Keyboard.KeyPattern.prototype.matchKeyDown = function(keyDown) {
+  return this.match_(keyDown, false);
+};
+
+/**
+ * Return true if the given hterm.Keyboard.KeyPattern is exactly the same as
+ * this one.
+ *
+ * @param {hterm.Keyboard.KeyPattern}
+ */
+hterm.Keyboard.KeyPattern.prototype.matchKeyPattern = function(keyPattern) {
+  return this.match_(keyPattern, true);
 };
 // SOURCE FILE: hterm/js/hterm_options.js
 // Copyright (c) 2012 The Chromium OS Authors. All rights reserved.
@@ -6585,7 +7404,7 @@ hterm.Keyboard.KeyMap.prototype.onPlusMinusZero_ = function(e, keyDef) {
  * constructor.
  *
  * The defaults are as defined in http://www.vt100.net/docs/vt510-rm/DECSTR
- * except that we enable autowrap (wraparound) by defaut since that seems to
+ * except that we enable autowrap (wraparound) by default since that seems to
  * be what xterm does.
  *
  * @param {hterm.Options=} opt_copy Optional instance to copy.
@@ -6604,6 +7423,602 @@ hterm.Options = function(opt_copy) {
   this.insertMode = opt_copy ? opt_copy.insertMode : false;
   this.reverseVideo = opt_copy ? opt_copy.reverseVideo : false;
   this.bracketedPaste = opt_copy ? opt_copy.bracketedPaste : false;
+};
+// SOURCE FILE: hterm/js/hterm_parser.js
+// Copyright (c) 2015 The Chromium OS Authors. All rights reserved.
+// Use of this source code is governed by a BSD-style license that can be
+// found in the LICENSE file.
+
+'use strict';
+
+lib.rtdep('hterm.Keyboard.KeyActions');
+
+/**
+ * @constructor
+ * Parses the key definition syntax used for user keyboard customizations.
+ */
+hterm.Parser = function() {
+  /**
+   * @type {string} The source string.
+   */
+  this.source = '';
+
+  /**
+   * @type {number} The current position.
+   */
+  this.pos = 0;
+
+  /**
+   * @type {string?} The character at the current position.
+   */
+  this.ch = null;
+};
+
+hterm.Parser.prototype.error = function(message) {
+  return new Error('Parse error at ' + this.pos + ': ' + message);
+};
+
+hterm.Parser.prototype.isComplete = function() {
+  return this.pos == this.source.length;
+};
+
+hterm.Parser.prototype.reset = function(source, opt_pos) {
+  this.source = source;
+  this.pos = opt_pos || 0;
+  this.ch = source.substr(0, 1);
+};
+
+/**
+ * Parse a key sequence.
+ *
+ * A key sequence is zero or more of the key modifiers defined in
+ * hterm.Parser.identifiers.modifierKeys followed by a key code.  Key
+ * codes can be an integer or an identifier from
+ * hterm.Parser.identifiers.keyCodes.  Modifiers and keyCodes should be joined
+ * by the dash character.
+ *
+ * An asterisk "*" can be used to indicate that the unspecified modifiers
+ * are optional.
+ *
+ * For example:
+ *   A: Matches only an unmodified "A" character.
+ *   65: Same as above.
+ *   0x41: Same as above.
+ *   Ctrl-A: Matches only Ctrl-A.
+ *   Ctrl-65: Same as above.
+ *   Ctrl-0x41: Same as above.
+ *   Ctrl-Shift-A: Matches only Ctrl-Shift-A.
+ *   Ctrl-*-A: Matches Ctrl-A, as well as any other key sequence that includes
+ *     at least the Ctrl and A keys.
+ *
+ * @return {Object} An object with shift, ctrl, alt, meta, keyCode
+ *   properties.
+ */
+hterm.Parser.prototype.parseKeySequence = function() {
+  var rv = {
+    keyCode: null
+  };
+
+  for (var k in hterm.Parser.identifiers.modifierKeys) {
+    rv[hterm.Parser.identifiers.modifierKeys[k]] = false;
+  }
+
+  while (this.pos < this.source.length) {
+    this.skipSpace();
+
+    var token = this.parseToken();
+    if (token.type == 'integer') {
+      rv.keyCode = token.value;
+
+    } else if (token.type == 'identifier') {
+      var ucValue = token.value.toUpperCase();
+      if (ucValue in hterm.Parser.identifiers.modifierKeys &&
+          hterm.Parser.identifiers.modifierKeys.hasOwnProperty(ucValue)) {
+        var mod = hterm.Parser.identifiers.modifierKeys[ucValue];
+        if (rv[mod] && rv[mod] != '*')
+          throw this.error('Duplicate modifier: ' + token.value);
+        rv[mod] = true;
+
+      } else if (ucValue in hterm.Parser.identifiers.keyCodes &&
+                 hterm.Parser.identifiers.keyCodes.hasOwnProperty(ucValue)) {
+        rv.keyCode = hterm.Parser.identifiers.keyCodes[ucValue];
+
+      } else {
+        throw this.error('Unknown key: ' + token.value);
+      }
+
+    } else if (token.type == 'symbol') {
+      if (token.value == '*') {
+        for (var id in hterm.Parser.identifiers.modifierKeys) {
+          var p = hterm.Parser.identifiers.modifierKeys[id];
+          if (!rv[p])
+            rv[p] =  '*';
+        }
+      } else {
+        throw this.error('Unexpected symbol: ' + token.value);
+      }
+    } else {
+      throw this.error('Expected integer or identifier');
+    }
+
+    this.skipSpace();
+
+    if (this.ch != '-')
+      break;
+
+    if (rv.keyCode != null)
+      throw this.error('Extra definition after target key');
+
+    this.advance(1);
+  }
+
+  if (rv.keyCode == null)
+    throw this.error('Missing target key');
+
+  return rv;
+};
+
+hterm.Parser.prototype.parseKeyAction = function() {
+  this.skipSpace();
+
+  var token = this.parseToken();
+
+  if (token.type == 'string')
+    return token.value;
+
+  if (token.type == 'identifier') {
+    if (token.value in hterm.Parser.identifiers.actions &&
+        hterm.Parser.identifiers.actions.hasOwnProperty(token.value))
+      return hterm.Parser.identifiers.actions[token.value];
+
+    throw this.error('Unknown key action: ' + token.value);
+  }
+
+  throw this.error('Expected string or identifier');
+
+};
+
+hterm.Parser.prototype.peekString = function() {
+  return this.ch == '\'' || this.ch == '"';
+};
+
+hterm.Parser.prototype.peekIdentifier = function() {
+  return this.ch.match(/[a-z_]/i);
+};
+
+hterm.Parser.prototype.peekInteger = function() {
+  return this.ch.match(/[0-9]/);
+};
+
+hterm.Parser.prototype.parseToken = function() {
+  if (this.ch == '*') {
+    var rv = {type: 'symbol', value: this.ch};
+    this.advance(1);
+    return rv;
+  }
+
+  if (this.peekIdentifier())
+    return {type: 'identifier', value: this.parseIdentifier()};
+
+  if (this.peekString())
+    return {type: 'string', value: this.parseString()};
+
+  if (this.peekInteger())
+    return {type: 'integer', value: this.parseInteger()};
+
+
+  throw this.error('Unexpected token');
+};
+
+hterm.Parser.prototype.parseIdentifier = function() {
+  if (!this.peekIdentifier())
+    throw this.error('Expected identifier');
+
+  return this.parsePattern(/[a-z0-9_]+/ig);
+};
+
+hterm.Parser.prototype.parseInteger = function() {
+  var base = 10;
+
+  if (this.ch == '0' && this.pos < this.source.length - 1 &&
+      this.source.substr(this.pos + 1, 1) == 'x') {
+    return parseInt(this.parsePattern(/0x[0-9a-f]+/gi));
+  }
+
+  return parseInt(this.parsePattern(/\d+/g));
+};
+
+/**
+ * Parse a single or double quoted string.
+ *
+ * The current position should point at the initial quote character.  Single
+ * quoted strings will be treated literally, double quoted will process escapes.
+ *
+ * TODO(rginda): Variable interpolation.
+ *
+ * @param {ParseState} parseState
+ * @param {string} quote A single or double-quote character.
+ * @return {string}
+ */
+hterm.Parser.prototype.parseString = function() {
+  var result = '';
+
+  var quote = this.ch;
+  if (quote != '"' && quote != '\'')
+    throw this.error('String expected');
+
+  this.advance(1);
+
+  var re = new RegExp('[\\\\' + quote + ']', 'g');
+
+  while (this.pos < this.source.length) {
+    re.lastIndex = this.pos;
+    if (!re.exec(this.source))
+      throw this.error('Unterminated string literal');
+
+    result += this.source.substring(this.pos, re.lastIndex - 1);
+
+    this.advance(re.lastIndex - this.pos - 1);
+
+    if (quote == '"' && this.ch == '\\') {
+      this.advance(1);
+      result += this.parseEscape();
+      continue;
+    }
+
+    if (quote == '\'' && this.ch == '\\') {
+      result += this.ch;
+      this.advance(1);
+      continue;
+    }
+
+    if (this.ch == quote) {
+      this.advance(1);
+      return result;
+    }
+  }
+
+  throw this.error('Unterminated string literal');
+};
+
+
+/**
+ * Parse an escape code from the current position (which should point to
+ * the first character AFTER the leading backslash.)
+ *
+ * @return {string}
+ */
+hterm.Parser.prototype.parseEscape = function() {
+  var map = {
+    '"': '"',
+    '\'': '\'',
+    '\\': '\\',
+    'a': '\x07',
+    'b': '\x08',
+    'e': '\x1b',
+    'f': '\x0c',
+    'n': '\x0a',
+    'r': '\x0d',
+    't': '\x09',
+    'v': '\x0b',
+    'x': function() {
+      var value = this.parsePattern(/[a-z0-9]{2}/ig);
+      return String.fromCharCode(parseInt(value, 16));
+    },
+    'u': function() {
+      var value = this.parsePattern(/[a-z0-9]{4}/ig);
+      return String.fromCharCode(parseInt(value, 16));
+    }
+  };
+
+  if (!(this.ch in map && map.hasOwnProperty(this.ch)))
+    throw this.error('Unknown escape: ' + this.ch);
+
+  var value = map[this.ch];
+  this.advance(1);
+
+  if (typeof value == 'function')
+    value = value.call(this);
+
+  return value;
+};
+
+/**
+ * Parse the given pattern starting from the current position.
+ *
+ * @param {RegExp} pattern A pattern representing the characters to span.  MUST
+ *   include the "global" RegExp flag.
+ * @return {string}
+ */
+hterm.Parser.prototype.parsePattern = function(pattern) {
+  if (!pattern.global)
+    throw this.error('Internal error: Span patterns must be global');
+
+  pattern.lastIndex = this.pos;
+  var ary = pattern.exec(this.source);
+
+  if (!ary || pattern.lastIndex - ary[0].length != this.pos)
+    throw this.error('Expected match for: ' + pattern);
+
+  this.pos = pattern.lastIndex - 1;
+  this.advance(1);
+
+  return ary[0];
+};
+
+
+/**
+ * Advance the current position.
+ *
+ * @param {number} count
+ */
+hterm.Parser.prototype.advance = function(count) {
+  this.pos += count;
+  this.ch = this.source.substr(this.pos, 1);
+};
+
+/**
+ * @param {string=} opt_expect A list of valid non-whitespace characters to
+ *   terminate on.
+ * @return {void}
+ */
+hterm.Parser.prototype.skipSpace = function(opt_expect) {
+  if (!/\s/.test(this.ch))
+    return;
+
+  var re = /\s+/gm;
+  re.lastIndex = this.pos;
+
+  var source = this.source;
+  if (re.exec(source))
+    this.pos = re.lastIndex;
+
+  this.ch = this.source.substr(this.pos, 1);
+
+  if (opt_expect) {
+    if (this.ch.indexOf(opt_expect) == -1) {
+      throw this.error('Expected one of ' + opt_expect + ', found: ' +
+          this.ch);
+    }
+  }
+};
+// SOURCE FILE: hterm/js/hterm_parser_identifiers.js
+// Copyright (c) 2015 The Chromium OS Authors. All rights reserved.
+// Use of this source code is governed by a BSD-style license that can be
+// found in the LICENSE file.
+
+'use strict';
+
+/**
+ * Collections of identifier for hterm.Parser.
+ */
+hterm.Parser.identifiers = {};
+
+/**
+ * Modifier key names used when defining key sequences.
+ *
+ * These are upper case so we can normalize the user input and be forgiving.
+ * "CTRL-A" and "Ctrl-A" and "ctrl-a" are all accepted.
+ *
+ * Note: Names here cannot overlap with hterm.Parser.identifiers.keyCodes.
+ */
+hterm.Parser.identifiers.modifierKeys = {
+  SHIFT: 'shift',
+  CTRL: 'ctrl',
+  // Common alias.
+  CONTROL: 'ctrl',
+  ALT: 'alt',
+  META: 'meta'
+};
+
+/**
+ * Key codes useful when defining key sequences.
+ *
+ * Punctuation is mostly left out of this list because they can move around
+ * based on keyboard locale and browser.
+ *
+ * In a key sequence like "Ctrl-ESC", the ESC comes from this list of
+ * identifiers.  It is equivalent to "Ctrl-27" and "Ctrl-0x1b".
+ *
+ * These are upper case so we can normalize the user input and be forgiving.
+ * "Ctrl-ESC" and "Ctrl-Esc" an "Ctrl-esc" are all accepted.
+ *
+ * We also include common aliases for the same key.  "Esc" and "Escape" are the
+ * same key.
+ *
+ * Note: Names here cannot overlap with hterm.Parser.identifiers.modifierKeys.
+ */
+hterm.Parser.identifiers.keyCodes = {
+  // Top row.
+  ESCAPE: 27,
+  ESC: 27,
+  F1: 112,
+  F2: 113,
+  F3: 114,
+  F4: 115,
+  F5: 116,
+  F6: 117,
+  F7: 118,
+  F8: 119,
+  F9: 120,
+  F10: 121,
+  F11: 122,
+  F12: 123,
+
+  // Row two.
+  ONE: 49,
+  TWO: 50,
+  THREE: 51,
+  FOUR: 52,
+  FIVE: 53,
+  SIX: 54,
+  SEVEN: 55,
+  EIGHT: 56,
+  NINE: 57,
+  ZERO: 48,
+  BACKSPACE: 8,
+  BKSP: 8,
+  BS: 8,
+
+  // Row three.
+  TAB: 9,
+  Q: 81,
+  W: 87,
+  E: 69,
+  R: 82,
+  T: 84,
+  Y: 89,
+  U: 85,
+  I: 73,
+  O: 79,
+  P: 80,
+
+  // Row four.
+  CAPS_LOCK: 20,
+  CAPSLOCK: 20,
+  CAPS: 20,
+  A: 65,
+  S: 83,
+  D: 68,
+  F: 70,
+  G: 71,
+  H: 72,
+  J: 74,
+  K: 75,
+  L: 76,
+  // We map enter and return together even though enter should really be 10
+  // because most people don't know or care about the history here.  Plus,
+  // most keyboards/programs map them together already.  If they really want
+  // to bind them differently, they can also use the numeric value.
+  ENTER: 13,
+  ENT: 13,
+  RETURN: 13,
+  RET: 13,
+
+  // Row five.
+  Z: 90,
+  X: 88,
+  C: 67,
+  V: 86,
+  B: 66,
+  N: 78,
+  M: 77,
+
+  // Etc.
+  SPACE: 32,
+  SP: 32,
+  PRINT_SCREEN: 42,
+  PRTSC: 42,
+  SCROLL_LOCK: 145,
+  SCRLK: 145,
+  BREAK: 19,
+  BRK: 19,
+  INSERT: 45,
+  INS: 45,
+  HOME: 36,
+  PAGE_UP: 33,
+  PGUP: 33,
+  DELETE: 46,
+  DEL: 46,
+  END: 35,
+  PAGE_DOWN: 34,
+  PGDOWN: 34,
+  PGDN: 34,
+  UP: 38,
+  DOWN: 40,
+  RIGHT: 39,
+  LEFT: 37,
+  NUMLOCK: 144,
+
+  // Keypad
+  KP0: 96,
+  KP1: 97,
+  KP2: 98,
+  KP3: 99,
+  KP4: 100,
+  KP5: 101,
+  KP6: 102,
+  KP7: 103,
+  KP8: 104,
+  KP9: 105,
+  KP_PLUS: 107,
+  KP_ADD: 107,
+  KP_MINUS: 109,
+  KP_SUBTRACT: 109,
+  KP_STAR: 106,
+  KP_MULTIPLY: 106,
+  KP_DIVIDE: 111,
+  KP_DECIMAL: 110,
+  KP_PERIOD: 110,
+
+  // Chrome OS media keys
+  NAVIGATE_BACK: 166,
+  NAVIGATE_FORWARD: 167,
+  RELOAD: 168,
+  FULL_SCREEN: 183,
+  WINDOW_OVERVIEW: 182,
+  BRIGHTNESS_UP: 216,
+  BRIGHTNESS_DOWN: 217
+};
+
+/**
+ * Identifiers for use in key actions.
+ */
+hterm.Parser.identifiers.actions = {
+  /**
+   * Prevent the browser and operating system from handling the event.
+   */
+  CANCEL: hterm.Keyboard.KeyActions.CANCEL,
+
+  /**
+   * Wait for a "keypress" event, send the keypress charCode to the host.
+   */
+  DEFAULT: hterm.Keyboard.KeyActions.DEFAULT,
+
+  /**
+   * Let the browser or operating system handle the key.
+   */
+  PASS: hterm.Keyboard.KeyActions.PASS,
+
+  /**
+   * Scroll the terminal one page up.
+   */
+  scrollPageUp: function(terminal) {
+    terminal.scrollPageUp();
+    return hterm.Keyboard.KeyActions.CANCEL;
+  },
+
+  /**
+   * Scroll the terminal one page down.
+   */
+  scrollPageDown: function(terminal) {
+    terminal.scrollPageDown();
+    return hterm.Keyboard.KeyActions.CANCEL;
+  },
+
+  /**
+   * Scroll the terminal to the top.
+   */
+  scrollToTop: function(terminal) {
+    terminal.scrollEnd();
+    return hterm.Keyboard.KeyActions.CANCEL;
+  },
+
+  /**
+   * Scroll the terminal to the bottom.
+   */
+  scrollToBottom: function(terminal) {
+    terminal.scrollEnd();
+    return hterm.Keyboard.KeyActions.CANCEL;
+  },
+
+  /**
+   * Clear the terminal and scrollback buffer.
+   */
+  clearScrollback: function(terminal) {
+    terminal.wipeContents();
+    return hterm.Keyboard.KeyActions.CANCEL;
+  }
 };
 // SOURCE FILE: hterm/js/hterm_preference_manager.js
 // Copyright (c) 2012 The Chromium OS Authors. All rights reserved.
@@ -6624,356 +8039,464 @@ hterm.PreferenceManager = function(profileId) {
                              '/hterm/profiles/' + profileId);
   var defs = hterm.PreferenceManager.defaultPreferences;
   Object.keys(defs).forEach(function(key) {
-    this.definePreference(key, defs[key]);
+    this.definePreference(key, defs[key][1]);
   }.bind(this));
 };
 
+hterm.PreferenceManager.categories = {};
+hterm.PreferenceManager.categories.Keyboard = 'Keyboard';
+hterm.PreferenceManager.categories.Appearance = 'Appearance';
+hterm.PreferenceManager.categories.CopyPaste = 'CopyPaste';
+hterm.PreferenceManager.categories.Sounds = 'Sounds';
+hterm.PreferenceManager.categories.Scrolling = 'Scrolling';
+hterm.PreferenceManager.categories.Encoding = 'Encoding';
+hterm.PreferenceManager.categories.Miscellaneous = 'Miscellaneous';
+
+/**
+ * List of categories, ordered by display order (top to bottom)
+ */
+hterm.PreferenceManager.categoryDefinitions = [
+  { id: hterm.PreferenceManager.categories.Appearance,
+    text: 'Appearance (fonts, colors, images)'},
+  { id: hterm.PreferenceManager.categories.CopyPaste,
+    text: 'Copy & Paste'},
+  { id: hterm.PreferenceManager.categories.Encoding,
+    text: 'Encoding'},
+  { id: hterm.PreferenceManager.categories.Keyboard,
+    text: 'Keyboard'},
+  { id: hterm.PreferenceManager.categories.Scrolling,
+    text: 'Scrolling'},
+  { id: hterm.PreferenceManager.categories.Sounds,
+    text: 'Sounds'},
+  { id: hterm.PreferenceManager.categories.Miscellaneous,
+    text: 'Misc.'}
+];
+
+
 hterm.PreferenceManager.defaultPreferences = {
-  /**
-   * If set, undoes the Chrome OS Alt-Backspace->DEL remap, so that
-   * alt-backspace indeed is alt-backspace.
-   */
-  'alt-backspace-is-meta-backspace': false,
+  'alt-gr-mode':
+  [hterm.PreferenceManager.categories.Keyboard, null,
+   [null, 'none', 'ctrl-alt', 'left-alt', 'right-alt'],
+   'Select an AltGr detection hack^Wheuristic.\n' +
+   '\n' +
+   '\'null\': Autodetect based on navigator.language:\n' +
+   '      \'en-us\' => \'none\', else => \'right-alt\'\n' +
+   '\'none\': Disable any AltGr related munging.\n' +
+   '\'ctrl-alt\': Assume Ctrl+Alt means AltGr.\n' +
+   '\'left-alt\': Assume left Alt means AltGr.\n' +
+   '\'right-alt\': Assume right Alt means AltGr.\n'],
 
-  /**
-   * Set whether the alt key acts as a meta key or as a distinct alt key.
-   */
-  'alt-is-meta': false,
+  'alt-backspace-is-meta-backspace':
+  [hterm.PreferenceManager.categories.Keyboard, false, 'bool',
+   'If set, undoes the Chrome OS Alt-Backspace->DEL remap, so that ' +
+   'alt-backspace indeed is alt-backspace.'],
 
-  /**
-   * Controls how the alt key is handled.
-   *
-   *  escape....... Send an ESC prefix.
-   *  8-bit........ Add 128 to the unshifted character as in xterm.
-   *  browser-key.. Wait for the keypress event and see what the browser says.
-   *                (This won't work well on platforms where the browser
-   *                 performs a default action for some alt sequences.)
-   */
-  'alt-sends-what': 'escape',
+  'alt-is-meta':
+  [hterm.PreferenceManager.categories.Keyboard, false, 'bool',
+   'Set whether the alt key acts as a meta key or as a distinct alt key.'],
 
-  /**
-   * Terminal bell sound.  Empty string for no audible bell.
-   */
-  'audible-bell-sound': 'lib-resource:hterm/audio/bell',
+  'alt-sends-what':
+  [hterm.PreferenceManager.categories.Keyboard, 'escape',
+   ['escape', '8-bit', 'browser-key'],
+   'Controls how the alt key is handled.\n' +
+   '\n' +
+   '  escape....... Send an ESC prefix.\n' +
+   '  8-bit........ Add 128 to the unshifted character as in xterm.\n' +
+   '  browser-key.. Wait for the keypress event and see what the browser \n' +
+   '                says.  (This won\'t work well on platforms where the \n' +
+   '                browser performs a default action for some alt sequences.)'
+  ],
 
-  /**
-   * If true, terminal bells in the background will create a Web
-   * Notification. http://www.w3.org/TR/notifications/
-   *
-   * Displaying notifications requires permission from the user. When this
-   * option is set to true, hterm will attempt to ask the user for permission
-   * if necessary. Note browsers may not show this permission request if it
-   * did not originate from a user action.
-   *
-   * Chrome extensions with the "notfications" permission have permission to
-   * display notifications.
-   */
-  'desktop-notification-bell': false,
+  'audible-bell-sound':
+  [hterm.PreferenceManager.categories.Sounds, 'lib-resource:hterm/audio/bell',
+   'url',
+   'URL of the terminal bell sound.  Empty string for no audible bell.'],
 
-  /**
-   * The background color for text with no other color attributes.
-   */
-  'background-color': 'rgb(16, 16, 16)',
+  'desktop-notification-bell':
+  [hterm.PreferenceManager.categories.Sounds, false, 'bool',
+   'If true, terminal bells in the background will create a Web ' +
+   'Notification. https://www.w3.org/TR/notifications/\n' +
+   '\n'+
+   'Displaying notifications requires permission from the user. When this ' +
+   'option is set to true, hterm will attempt to ask the user for permission ' +
+   'if necessary. Note browsers may not show this permission request if it ' +
+   'did not originate from a user action.\n' +
+   '\n' +
+   'Chrome extensions with the "notifications" permission have permission to ' +
+   'display notifications.'],
 
-  /**
-   * The background image.
-   */
-  'background-image': '',
+  'background-color':
+  [hterm.PreferenceManager.categories.Appearance, 'rgb(16, 16, 16)', 'color',
+   'The background color for text with no other color attributes.'],
 
-  /**
-   * The background image size,
-   *
-   * Defaults to none.
-   */
-  'background-size': '',
+  'background-image':
+  [hterm.PreferenceManager.categories.Appearance, '', 'string',
+   'CSS value of the background image.  Empty string for no image.\n' +
+   '\n' +
+   'For example:\n' +
+   '  url(https://goo.gl/anedTK)\n' +
+   '  linear-gradient(top bottom, blue, red)'],
 
-  /**
-   * The background image position,
-   *
-   * Defaults to none.
-   */
-  'background-position': '',
+  'background-size':
+  [hterm.PreferenceManager.categories.Appearance, '', 'string',
+   'CSS value of the background image size.  Defaults to none.'],
 
-  /**
-   * If true, the backspace should send BS ('\x08', aka ^H).  Otherwise
-   * the backspace key should send '\x7f'.
-   */
-  'backspace-sends-backspace': false,
+  'background-position':
+  [hterm.PreferenceManager.categories.Appearance, '', 'string',
+   'CSS value of the background image position.\n' +
+   '\n' +
+   'For example:\n' +
+   '  10% 10%\n' +
+   '  center'],
 
-  /**
-   * Whether or not to close the window when the command exits.
-   */
-  'close-on-exit': true,
+  'backspace-sends-backspace':
+  [hterm.PreferenceManager.categories.Keyboard, false, 'bool',
+   'If true, the backspace should send BS (\'\\x08\', aka ^H).  Otherwise ' +
+   'the backspace key should send \'\\x7f\'.'],
 
-  /**
-   * Whether or not to blink the cursor by default.
-   */
-  'cursor-blink': false,
+  'character-map-overrides':
+  [hterm.PreferenceManager.categories.Appearance, null, 'value',
+    'This is specified as an object. It is a sparse array, where each '  +
+    'property is the character set code and the value is an object that is ' +
+    'a sparse array itself. In that sparse array, each property is the ' +
+    'received character and the value is the displayed character.\n' +
+    '\n' +
+    'For example:\n' +
+    '  {"0":{"+":"\\u2192",",":"\\u2190","-":"\\u2191",".":"\\u2193", ' +
+    '"0":"\\u2588"}}'
+  ],
 
-  /**
-   * The cursor blink rate in milliseconds.
-   *
-   * A two element array, the first of which is how long the cursor should be
-   * on, second is how long it should be off.
-   */
-  'cursor-blink-cycle': [1000, 500],
+  'close-on-exit':
+  [hterm.PreferenceManager.categories.Miscellaneous, true, 'bool',
+   'Whether or not to close the window when the command exits.'],
 
-  /**
-   * The color of the visible cursor.
-   */
-  'cursor-color': 'rgba(255, 0, 0, 0.5)',
+  'cursor-blink':
+  [hterm.PreferenceManager.categories.Appearance, false, 'bool',
+   'Whether or not to blink the cursor by default.'],
 
-  /**
-   * Override colors in the default palette.
-   *
-   * This can be specified as an array or an object.  If specified as an
-   * object it is assumed to be a sparse array, where each property
-   * is a numeric index into the color palette.
-   *
-   * Values can be specified as css almost any css color value.  This
-   * includes #RGB, #RRGGBB, rgb(...), rgba(...), and any color names
-   * that are also part of the stock X11 rgb.txt file.
-   *
-   * You can use 'null' to specify that the default value should be not
-   * be changed.  This is useful for skipping a small number of indicies
-   * when the value is specified as an array.
-   */
-  'color-palette-overrides': null,
+  'cursor-blink-cycle':
+  [hterm.PreferenceManager.categories.Appearance, [1000, 500], 'value',
+   'The cursor blink rate in milliseconds.\n' +
+   '\n' +
+   'A two element array, the first of which is how long the cursor should be ' +
+   'on, second is how long it should be off.'],
 
-  /**
-   * Automatically copy mouse selection to the clipboard.
-   */
-  'copy-on-select': true,
+  'cursor-color':
+  [hterm.PreferenceManager.categories.Appearance, 'rgba(255, 0, 0, 0.5)',
+   'color',
+   'The color of the visible cursor.'],
 
-  /**
-   * Whether to use the default window copy behaviour.
-   */
-  'use-default-window-copy': false,
+  'color-palette-overrides':
+  [hterm.PreferenceManager.categories.Appearance, null, 'value',
+   'Override colors in the default palette.\n' +
+   '\n' +
+   'This can be specified as an array or an object.  If specified as an ' +
+   'object it is assumed to be a sparse array, where each property ' +
+   'is a numeric index into the color palette.\n' +
+   '\n' +
+   'Values can be specified as almost any css color value.  This ' +
+   'includes #RGB, #RRGGBB, rgb(...), rgba(...), and any color names ' +
+   'that are also part of the stock X11 rgb.txt file.\n' +
+   '\n' +
+   'You can use \'null\' to specify that the default value should be not ' +
+   'be changed.  This is useful for skipping a small number of indices ' +
+   'when the value is specified as an array.'],
 
-  /**
-   * Whether to clear the selection after copying.
-   */
-  'clear-selection-after-copy': true,
+  'copy-on-select':
+  [hterm.PreferenceManager.categories.CopyPaste, true, 'bool',
+   'Automatically copy mouse selection to the clipboard.'],
 
-  /**
-   * If true, Ctrl-Plus/Minus/Zero controls zoom.
-   * If false, Ctrl-Shift-Plus/Minus/Zero controls zoom, Ctrl-Minus sends ^_,
-   * Ctrl-Plus/Zero do nothing.
-   */
-  'ctrl-plus-minus-zero-zoom': true,
+  'use-default-window-copy':
+  [hterm.PreferenceManager.categories.CopyPaste, false, 'bool',
+   'Whether to use the default window copy behavior'],
 
-  /**
-   * Ctrl+C copies if true, send ^C to host if false.
-   * Ctrl+Shift+C sends ^C to host if true, copies if false.
-   */
-  'ctrl-c-copy': false,
+  'clear-selection-after-copy':
+  [hterm.PreferenceManager.categories.CopyPaste, true, 'bool',
+   'Whether to clear the selection after copying.'],
 
-  /**
-   * Ctrl+V pastes if true, send ^V to host if false.
-   * Ctrl+Shift+V sends ^V to host if true, pastes if false.
-   */
-  'ctrl-v-paste': false,
+  'ctrl-plus-minus-zero-zoom':
+  [hterm.PreferenceManager.categories.Keyboard, true, 'bool',
+   'If true, Ctrl-Plus/Minus/Zero controls zoom.\n' +
+   'If false, Ctrl-Shift-Plus/Minus/Zero controls zoom, Ctrl-Minus sends ^_, ' +
+   'Ctrl-Plus/Zero do nothing.'],
 
-  /**
-   * Set whether East Asian Ambiguous characters have two column width.
-   */
-  'east-asian-ambiguous-as-two-column': false,
+  'ctrl-c-copy':
+  [hterm.PreferenceManager.categories.Keyboard, false, 'bool',
+   'Ctrl+C copies if true, send ^C to host if false.\n' +
+   'Ctrl+Shift+C sends ^C to host if true, copies if false.'],
 
-  /**
-   * True to enable 8-bit control characters, false to ignore them.
-   *
-   * We'll respect the two-byte versions of these control characters
-   * regardless of this setting.
-   */
-  'enable-8-bit-control': false,
+  'ctrl-v-paste':
+  [hterm.PreferenceManager.categories.Keyboard, false, 'bool',
+   'Ctrl+V pastes if true, send ^V to host if false.\n' +
+   'Ctrl+Shift+V sends ^V to host if true, pastes if false.'],
 
-  /**
-   * True if we should use bold weight font for text with the bold/bright
-   * attribute.  False to use the normal weight font.  Null to autodetect.
-   */
-  'enable-bold': null,
+  'east-asian-ambiguous-as-two-column':
+  [hterm.PreferenceManager.categories.Keyboard, false, 'bool',
+   'Set whether East Asian Ambiguous characters have two column width.'],
 
-  /**
-   * True if we should use bright colors (8-15 on a 16 color palette)
-   * for any text with the bold attribute.  False otherwise.
-   */
-  'enable-bold-as-bright': true,
+  'enable-8-bit-control':
+  [hterm.PreferenceManager.categories.Keyboard, false, 'bool',
+   'True to enable 8-bit control characters, false to ignore them.\n' +
+   '\n' +
+   'We\'ll respect the two-byte versions of these control characters ' +
+   'regardless of this setting.'],
 
-  /**
-   * Allow the host to write directly to the system clipboard.
-   */
-  'enable-clipboard-notice': true,
+  'enable-bold':
+  [hterm.PreferenceManager.categories.Appearance, null, 'tristate',
+   'True if we should use bold weight font for text with the bold/bright ' +
+   'attribute.  False to use the normal weight font.  Null to autodetect.'],
 
-  /**
-   * Allow the host to write directly to the system clipboard.
-   */
-  'enable-clipboard-write': true,
+  'enable-bold-as-bright':
+  [hterm.PreferenceManager.categories.Appearance, true, 'bool',
+   'True if we should use bright colors (8-15 on a 16 color palette) ' +
+   'for any text with the bold attribute.  False otherwise.'],
 
-  /**
-   * Respect the host's attempt to change the cursor blink status using
-   * DEC Private Mode 12.
-   */
-  'enable-dec12': false,
+  'enable-blink':
+  [hterm.PreferenceManager.categories.Appearance, true, 'bool',
+   'True if we should respect the blink attribute.  False to ignore it.  '],
 
-  /**
-   * The default environment variables.
-   */
-  'environment': {'TERM': 'xterm-256color'},
+  'enable-clipboard-notice':
+  [hterm.PreferenceManager.categories.CopyPaste, true, 'bool',
+   'Show a message in the terminal when the host writes to the clipboard.'],
 
-  /**
-   * Default font family for the terminal text.
-   */
-  'font-family': ('"DejaVu Sans Mono", "Everson Mono", ' +
-                  'FreeMono, "Menlo", "Terminal", ' +
-                  'monospace'),
+  'enable-clipboard-write':
+  [hterm.PreferenceManager.categories.CopyPaste, true, 'bool',
+   'Allow the remote host to write directly to the local system clipboard.\n' +
+   'Read access is never granted regardless of this setting.\n' +
+   '\n' +
+   'This is used to control access to features like OSC-52.'],
 
-  /**
-   * The default font size in pixels.
-   */
-  'font-size': 15,
+  'enable-dec12':
+  [hterm.PreferenceManager.categories.Miscellaneous, false, 'bool',
+   'Respect the host\'s attempt to change the cursor blink status using ' +
+   'DEC Private Mode 12.'],
 
-  /**
-   * Anti-aliasing.
-   */
-  'font-smoothing': 'antialiased',
+  'environment':
+  [hterm.PreferenceManager.categories.Miscellaneous, {'TERM': 'xterm-256color'},
+   'value',
+   'The default environment variables, as an object.'],
 
-  /**
-   * The foreground color for text with no other color attributes.
-   */
-  'foreground-color': 'rgb(240, 240, 240)',
+  'font-family':
+  [hterm.PreferenceManager.categories.Appearance,
+   '"DejaVu Sans Mono", "Everson Mono", FreeMono, "Menlo", "Terminal", ' +
+   'monospace', 'string',
+   'Default font family for the terminal text.'],
 
-  /**
-   * If true, home/end will control the terminal scrollbar and shift home/end
-   * will send the VT keycodes.  If false then home/end sends VT codes and
-   * shift home/end scrolls.
-   */
-  'home-keys-scroll': false,
+  'font-size':
+  [hterm.PreferenceManager.categories.Appearance, 15, 'int',
+   'The default font size in pixels.'],
 
-  /**
-   * Max length of a DCS, OSC, PM, or APS sequence before we give up and
-   * ignore the code.
-   */
-  'max-string-sequence': 100000,
+  'font-smoothing':
+  [hterm.PreferenceManager.categories.Appearance, 'antialiased', 'string',
+   'CSS font-smoothing property.'],
 
-  /**
-   * If true, convert media keys to their Fkey equivalent. If false, let
-   * Chrome handle the keys.
-   */
-  'media-keys-are-fkeys': false,
+  'foreground-color':
+  [hterm.PreferenceManager.categories.Appearance, 'rgb(240, 240, 240)', 'color',
+   'The foreground color for text with no other color attributes.'],
 
-  /**
-   * Set whether the meta key sends a leading escape or not.
-   */
-  'meta-sends-escape': true,
+  'home-keys-scroll':
+  [hterm.PreferenceManager.categories.Keyboard, false, 'bool',
+   'If true, home/end will control the terminal scrollbar and shift home/end ' +
+   'will send the VT keycodes.  If false then home/end sends VT codes and ' +
+   'shift home/end scrolls.'],
 
-  /**
-   * Mouse paste button, or null to autodetect.
-   *
-   * For autodetect, we'll try to enable middle button paste for non-X11
-   * platforms.
-   *
-   * On X11 we move it to button 3, but that'll probably be a context menu
-   * in the future.
-   */
-  'mouse-paste-button': null,
+  'keybindings':
+  [hterm.PreferenceManager.categories.Keyboard, null, 'value',
+   'A map of key sequence to key actions.  Key sequences include zero or ' +
+   'more modifier keys followed by a key code.  Key codes can be decimal or ' +
+   'hexadecimal numbers, or a key identifier.  Key actions can be specified ' +
+   'a string to send to the host, or an action identifier.  For a full ' +
+   'explanation of the format, see https://goo.gl/LWRndr.\n' +
+   '\n' +
+   'Sample keybindings:\n' +
+   '{\n' +
+   '  "Ctrl-Alt-K": "clearScrollback",\n' +
+   '  "Ctrl-Shift-L": "PASS",\n' +
+   '  "Ctrl-H": "\'HELLO\\n\'"\n' +
+   '}'],
 
-  /**
-   * If true, page up/down will control the terminal scrollbar and shift
-   * page up/down will send the VT keycodes.  If false then page up/down
-   * sends VT codes and shift page up/down scrolls.
-   */
-  'page-keys-scroll': false,
+  'max-string-sequence':
+  [hterm.PreferenceManager.categories.Encoding, 100000, 'int',
+   'Max length of a DCS, OSC, PM, or APS sequence before we give up and ' +
+   'ignore the code.'],
 
-  /**
-   * Set whether we should pass Alt-1..9 to the browser.
-   *
-   * This is handy when running hterm in a browser tab, so that you don't lose
-   * Chrome's "switch to tab" keyboard accelerators.  When not running in a
-   * tab it's better to send these keys to the host so they can be used in
-   * vim or emacs.
-   *
-   * If true, Alt-1..9 will be handled by the browser.  If false, Alt-1..9
-   * will be sent to the host.  If null, autodetect based on browser platform
-   * and window type.
-   */
-  'pass-alt-number': null,
+  'media-keys-are-fkeys':
+  [hterm.PreferenceManager.categories.Keyboard, false, 'bool',
+   'If true, convert media keys to their Fkey equivalent. If false, let ' +
+   'the browser handle the keys.'],
 
-  /**
-   * Set whether we should pass Ctrl-1..9 to the browser.
-   *
-   * This is handy when running hterm in a browser tab, so that you don't lose
-   * Chrome's "switch to tab" keyboard accelerators.  When not running in a
-   * tab it's better to send these keys to the host so they can be used in
-   * vim or emacs.
-   *
-   * If true, Ctrl-1..9 will be handled by the browser.  If false, Ctrl-1..9
-   * will be sent to the host.  If null, autodetect based on browser platform
-   * and window type.
-   */
-  'pass-ctrl-number': null,
+  'meta-sends-escape':
+  [hterm.PreferenceManager.categories.Keyboard, true, 'bool',
+   'Set whether the meta key sends a leading escape or not.'],
 
-  /**
-   * Set whether we should pass Meta-1..9 to the browser.
-   *
-   * This is handy when running hterm in a browser tab, so that you don't lose
-   * Chrome's "switch to tab" keyboard accelerators.  When not running in a
-   * tab it's better to send these keys to the host so they can be used in
-   * vim or emacs.
-   *
-   * If true, Meta-1..9 will be handled by the browser.  If false, Meta-1..9
-   * will be sent to the host.  If null, autodetect based on browser platform
-   * and window type.
-   */
-  'pass-meta-number': null,
+  'mouse-right-click-paste':
+  [hterm.PreferenceManager.categories.CopyPaste, true, 'bool',
+   'Paste on right mouse button clicks.\n' +
+   '\n' +
+   'This option is activate independent of the "mouse-paste-button" ' +
+   'setting.\n' +
+   '\n' +
+   'Note: This will handle left & right handed mice correctly.'],
 
-  /**
-   * Set whether meta-V gets passed to host.
-   */
-  'pass-meta-v': true,
+  'mouse-paste-button':
+  [hterm.PreferenceManager.categories.CopyPaste, null,
+   [null, 0, 1, 2, 3, 4, 5, 6],
+   'Mouse paste button, or null to autodetect.\n' +
+   '\n' +
+   'For autodetect, we\'ll use the middle mouse button for non-X11 ' +
+   'platforms (including Chrome OS).  On X11, we\'ll use the right mouse ' +
+   'button (since the native window manager should paste via the middle ' +
+   'mouse button).\n' +
+   '\n' +
+   '0 == left (primary) button.\n' +
+   '1 == middle (auxiliary) button.\n' +
+   '2 == right (secondary) button.\n' +
+   '\n' +
+   'This option is activate independent of the "mouse-right-click-paste" ' +
+   'setting.\n' +
+   '\n' +
+   'Note: This will handle left & right handed mice correctly.'],
 
-  /**
-   * Set the expected encoding for data received from the host.
-   *
-   * Valid values are 'utf-8' and 'raw'.
-   */
-  'receive-encoding': 'utf-8',
+  'word-break-match-left':
+  [hterm.PreferenceManager.categories.CopyPaste,
+   '[^\\s\\[\\](){}<>"\'\\^!@#$%&*,;:`]', 'string',
+   'Regular expression to halt matching to the left (start) of a selection.\n' +
+   '\n' +
+   'Normally this is a character class to reject specific characters.\n' +
+   'We allow "~" and "." by default as paths frequently start with those.'],
 
-  /**
-   * If true, scroll to the bottom on any keystroke.
-   */
-  'scroll-on-keystroke': true,
+  'word-break-match-right':
+  [hterm.PreferenceManager.categories.CopyPaste,
+   '[^\\s\\[\\](){}<>"\'\\^!@#$%&*,;:~.`]', 'string',
+   'Regular expression to halt matching to the right (end) of a selection.\n' +
+   '\n' +
+   'Normally this is a character class to reject specific characters.'],
 
-  /**
-   * If true, scroll to the bottom on terminal output.
-   */
-  'scroll-on-output': false,
+  'word-break-match-middle':
+  [hterm.PreferenceManager.categories.CopyPaste,
+   '[^\\s\\[\\](){}<>"\'\\^]*', 'string',
+   'Regular expression to match all the characters in the middle.\n' +
+   '\n' +
+   'Normally this is a character class to reject specific characters.\n' +
+   '\n' +
+   'Used to expand the selection surrounding the starting point.'],
 
-  /**
-   * The vertical scrollbar mode.
-   */
-  'scrollbar-visible': true,
+  'page-keys-scroll':
+  [hterm.PreferenceManager.categories.Keyboard, false, 'bool',
+   'If true, page up/down will control the terminal scrollbar and shift ' +
+   'page up/down will send the VT keycodes.  If false then page up/down ' +
+   'sends VT codes and shift page up/down scrolls.'],
 
-  /**
-   * Set the encoding for data sent to host.
-   *
-   * Valid values are 'utf-8' and 'raw'.
-   */
-  'send-encoding': 'utf-8',
+  'pass-alt-number':
+  [hterm.PreferenceManager.categories.Keyboard, null, 'tristate',
+   'Set whether we should pass Alt-1..9 to the browser.\n' +
+   '\n' +
+   'This is handy when running hterm in a browser tab, so that you don\'t ' +
+   'lose Chrome\'s "switch to tab" keyboard accelerators.  When not running ' +
+   'in a tab it\'s better to send these keys to the host so they can be ' +
+   'used in vim or emacs.\n' +
+   '\n' +
+   'If true, Alt-1..9 will be handled by the browser.  If false, Alt-1..9 ' +
+   'will be sent to the host.  If null, autodetect based on browser platform ' +
+   'and window type.'],
 
-  /**
-   * Shift + Insert pastes if true, sent to host if false.
-   */
-  'shift-insert-paste': true,
+  'pass-ctrl-number':
+  [hterm.PreferenceManager.categories.Keyboard, null, 'tristate',
+   'Set whether we should pass Ctrl-1..9 to the browser.\n' +
+   '\n' +
+   'This is handy when running hterm in a browser tab, so that you don\'t ' +
+   'lose Chrome\'s "switch to tab" keyboard accelerators.  When not running ' +
+   'in a tab it\'s better to send these keys to the host so they can be ' +
+   'used in vim or emacs.\n' +
+   '\n' +
+   'If true, Ctrl-1..9 will be handled by the browser.  If false, Ctrl-1..9 ' +
+   'will be sent to the host.  If null, autodetect based on browser platform ' +
+   'and window type.'],
 
-  /**
-   * User stylesheet to include in the terminal document.
-   */
-  'user-css': ''
+   'pass-meta-number':
+  [hterm.PreferenceManager.categories.Keyboard, null, 'tristate',
+   'Set whether we should pass Meta-1..9 to the browser.\n' +
+   '\n' +
+   'This is handy when running hterm in a browser tab, so that you don\'t ' +
+   'lose Chrome\'s "switch to tab" keyboard accelerators.  When not running ' +
+   'in a tab it\'s better to send these keys to the host so they can be ' +
+   'used in vim or emacs.\n' +
+   '\n' +
+   'If true, Meta-1..9 will be handled by the browser.  If false, Meta-1..9 ' +
+   'will be sent to the host.  If null, autodetect based on browser platform ' +
+   'and window type.'],
+
+  'pass-meta-v':
+  [hterm.PreferenceManager.categories.Keyboard, true, 'bool',
+   'Set whether meta-V gets passed to host.'],
+
+  'receive-encoding':
+  [hterm.PreferenceManager.categories.Encoding, 'utf-8', ['utf-8', 'raw'],
+   'Set the expected encoding for data received from the host.\n' +
+   '\n' +
+   'Valid values are \'utf-8\' and \'raw\'.'],
+
+  'scroll-on-keystroke':
+  [hterm.PreferenceManager.categories.Scrolling, true, 'bool',
+   'If true, scroll to the bottom on any keystroke.'],
+
+  'scroll-on-output':
+  [hterm.PreferenceManager.categories.Scrolling, false, 'bool',
+   'If true, scroll to the bottom on terminal output.'],
+
+  'scrollbar-visible':
+  [hterm.PreferenceManager.categories.Scrolling, true, 'bool',
+   'The vertical scrollbar mode.'],
+
+  'scroll-wheel-may-send-arrow-keys':
+  [hterm.PreferenceManager.categories.Scrolling, false, 'bool',
+   'When using the alternative screen buffer, and DECCKM (Application Cursor ' +
+   'Keys) is active, mouse wheel scroll events will emulate arrow keys.\n' +
+   '\n' +
+   'It can be temporarily disabled by holding the shift key.\n' +
+   '\n' +
+   'This frequently comes up when using pagers (less) or reading man pages ' +
+   'or text editors (vi/nano) or using screen/tmux.'],
+
+  'scroll-wheel-move-multiplier':
+  [hterm.PreferenceManager.categories.Scrolling, 1, 'int',
+   'The multiplier for the pixel delta in wheel events caused by the ' +
+   'scroll wheel. Alters how fast the page scrolls.'],
+
+  'send-encoding':
+  [hterm.PreferenceManager.categories.Encoding, 'utf-8', ['utf-8', 'raw'],
+   'Set the encoding for data sent to host.'],
+
+  'terminal-encoding':
+  [hterm.PreferenceManager.categories.Encoding, 'iso-2022',
+   ['iso-2022', 'utf-8', 'utf-8-locked'],
+   'The default terminal encoding (DOCS).\n' +
+   '\n' +
+   'ISO-2022 enables character map translations (like graphics maps).\n' +
+   'UTF-8 disables support for those.\n' +
+   '\n' +
+   'The locked variant means the encoding cannot be changed at runtime ' +
+   'via terminal escape sequences.\n' +
+   '\n' +
+   'You should stick with UTF-8 unless you notice broken rendering with ' +
+   'legacy applications.'],
+
+  'shift-insert-paste':
+  [hterm.PreferenceManager.categories.Keyboard, true, 'bool',
+   'Shift + Insert pastes if true, sent to host if false.'],
+
+  'user-css':
+  [hterm.PreferenceManager.categories.Appearance, '', 'url',
+   'URL of user stylesheet to include in the terminal document.'],
+
+  'user-css-text':
+  [hterm.PreferenceManager.categories.Appearance, '', 'multiline-string',
+   'Custom CSS text for styling the terminal.'],
 };
 
-hterm.PreferenceManager.prototype = {
-  __proto__: lib.PreferenceManager.prototype
-};
+hterm.PreferenceManager.prototype =
+    Object.create(lib.PreferenceManager.prototype);
+hterm.PreferenceManager.constructor = hterm.PreferenceManager;
 // SOURCE FILE: hterm/js/hterm_pubsub.js
 // Copyright (c) 2012 The Chromium OS Authors. All rights reserved.
 // Use of this source code is governed by a BSD-style license that can be
@@ -7147,6 +8670,11 @@ hterm.Screen = function(opt_columnCount) {
 
   // The offset in column width into cursorNode_ where the cursor is positioned.
   this.cursorOffset_ = null;
+
+  // Regexes for expanding word selections.
+  this.wordBreakMatchLeft = null;
+  this.wordBreakMatchRight = null;
+  this.wordBreakMatchMiddle = null;
 };
 
 /**
@@ -7211,7 +8739,7 @@ hterm.Screen.prototype.shiftRows = function(count) {
 /**
  * Insert a row at the top of the screen.
  *
- * @param {HTMLElement} The row to insert.
+ * @param {HTMLElement} row The row to insert.
  */
 hterm.Screen.prototype.unshiftRow = function(row) {
   this.rowsArray.splice(0, 0, row);
@@ -7220,7 +8748,7 @@ hterm.Screen.prototype.unshiftRow = function(row) {
 /**
  * Insert rows at the top of the screen.
  *
- * @param {Array.<HTMLElement>} The rows to insert.
+ * @param {Array.<HTMLElement>} rows The rows to insert.
  */
 hterm.Screen.prototype.unshiftRows = function(rows) {
   this.rowsArray.unshift.apply(this.rowsArray, rows);
@@ -7248,7 +8776,7 @@ hterm.Screen.prototype.popRows = function(count) {
 /**
  * Insert a row at the bottom of the screen.
  *
- * @param {HTMLElement} The row to insert.
+ * @param {HTMLElement} row The row to insert.
  */
 hterm.Screen.prototype.pushRow = function(row) {
   this.rowsArray.push(row);
@@ -7257,25 +8785,27 @@ hterm.Screen.prototype.pushRow = function(row) {
 /**
  * Insert rows at the bottom of the screen.
  *
- * @param {Array.<HTMLElement>} The rows to insert.
+ * @param {Array.<HTMLElement>} rows The rows to insert.
  */
 hterm.Screen.prototype.pushRows = function(rows) {
   rows.push.apply(this.rowsArray, rows);
 };
 
 /**
- * Insert a row at the specified column of the screen.
+ * Insert a row at the specified row of the screen.
  *
- * @param {HTMLElement} The row to insert.
+ * @param {integer} index The index to insert the row.
+ * @param {HTMLElement} row The row to insert.
  */
 hterm.Screen.prototype.insertRow = function(index, row) {
   this.rowsArray.splice(index, 0, row);
 };
 
 /**
- * Insert rows at the specified column of the screen.
+ * Insert rows at the specified row of the screen.
  *
- * @param {Array.<HTMLElement>} The rows to insert.
+ * @param {integer} index The index to insert the rows.
+ * @param {Array.<HTMLElement>} rows The rows to insert.
  */
 hterm.Screen.prototype.insertRows = function(index, rows) {
   for (var i = 0; i < rows.length; i++) {
@@ -7284,8 +8814,9 @@ hterm.Screen.prototype.insertRows = function(index, rows) {
 };
 
 /**
- * Remove a last row from the specified column of the screen and return it.
+ * Remove a row from the screen and return it.
  *
+ * @param {integer} index The index of the row to remove.
  * @return {HTMLElement} The selected row.
  */
 hterm.Screen.prototype.removeRow = function(index) {
@@ -7295,6 +8826,7 @@ hterm.Screen.prototype.removeRow = function(index) {
 /**
  * Remove rows from the bottom of the screen and return them as an array.
  *
+ * @param {integer} index The index to start removing rows.
  * @param {integer} count The number of rows to remove.
  * @return {Array.<HTMLElement>} The selected rows.
  */
@@ -7335,8 +8867,8 @@ hterm.Screen.prototype.clearCursorRow = function() {
     text = lib.f.getWhitespace(this.columnCount_);
   }
 
-  // We shouldn't honour inverse colors when clearing an area, to match
-  // xterm's back color erase behaviour.
+  // We shouldn't honor inverse colors when clearing an area, to match
+  // xterm's back color erase behavior.
   var inverse = this.textAttributes.inverse;
   this.textAttributes.inverse = false;
   this.textAttributes.syncColors();
@@ -7448,7 +8980,7 @@ hterm.Screen.prototype.syncSelectionCaret = function(selection) {
  *
  * For example:
  * Given the DOM fragment '<div><span>Hello World</span></div>', call splitNode_
- * passing the span and an offset of 6.  This would modifiy the fragment to
+ * passing the span and an offset of 6.  This would modify the fragment to
  * become: '<div><span>Hello </span><span>World</span></div>'.  If the span
  * had any attributes they would have been copied to the new span as well.
  *
@@ -7531,7 +9063,7 @@ hterm.Screen.prototype.maybeClipCurrentRow = function() {
  * It is also up to the caller to properly maintain the line overflow state
  * using hterm.Screen..commitLineOverflow().
  */
-hterm.Screen.prototype.insertString = function(str) {
+hterm.Screen.prototype.insertString = function(str, wcwidth=undefined) {
   var cursorNode = this.cursorNode_;
   var cursorNodeText = cursorNode.textContent;
 
@@ -7539,11 +9071,12 @@ hterm.Screen.prototype.insertString = function(str) {
 
   // We may alter the width of the string by prepending some missing
   // whitespaces, so we need to record the string width ahead of time.
-  var strWidth = lib.wc.strWidth(str);
+  if (wcwidth === undefined)
+    wcwidth = lib.wc.strWidth(str);
 
   // No matter what, before this function exits the cursor column will have
   // moved this much.
-  this.cursorPosition.column += strWidth;
+  this.cursorPosition.column += wcwidth;
 
   // Local cache of the cursor offset.
   var offset = this.cursorOffset_;
@@ -7558,18 +9091,21 @@ hterm.Screen.prototype.insertString = function(str) {
     // whitespace.
     var ws = lib.f.getWhitespace(-reverseOffset);
 
-    // This whitespace should be completely unstyled.  Underline and background
-    // color would be visible on whitespace, so we can't use one of those
-    // spans to hold the text.
+    // This whitespace should be completely unstyled.  Underline, background
+    // color, and strikethrough would be visible on whitespace, so we can't use
+    // one of those spans to hold the text.
     if (!(this.textAttributes.underline ||
+          this.textAttributes.strikethrough ||
           this.textAttributes.background ||
           this.textAttributes.wcNode ||
+          !this.textAttributes.asciiNode ||
           this.textAttributes.tileData != null)) {
       // Best case scenario, we can just pretend the spaces were part of the
       // original string.
       str = ws + str;
-    } else if (cursorNode.nodeType == 3 ||
+    } else if (cursorNode.nodeType == Node.TEXT_NODE ||
                !(cursorNode.wcNode ||
+                 !cursorNode.asciiNode ||
                  cursorNode.tileNode ||
                  cursorNode.style.textDecoration ||
                  cursorNode.style.backgroundColor)) {
@@ -7600,7 +9136,7 @@ hterm.Screen.prototype.insertString = function(str) {
           str + hterm.TextAttributes.nodeSubstr(cursorNode, offset);
     }
 
-    this.cursorOffset_ += strWidth;
+    this.cursorOffset_ += wcwidth;
     return;
   }
 
@@ -7622,7 +9158,7 @@ hterm.Screen.prototype.insertString = function(str) {
     var newNode = this.textAttributes.createContainer(str);
     this.cursorRowNode_.insertBefore(newNode, cursorNode);
     this.cursorNode_ = newNode;
-    this.cursorOffset_ = strWidth;
+    this.cursorOffset_ = wcwidth;
     return;
   }
 
@@ -7652,7 +9188,7 @@ hterm.Screen.prototype.insertString = function(str) {
   var newNode = this.textAttributes.createContainer(str);
   this.cursorRowNode_.insertBefore(newNode, cursorNode.nextSibling);
   this.cursorNode_ = newNode;
-  this.cursorOffset_ = strWidth;
+  this.cursorOffset_ = wcwidth;
 };
 
 /**
@@ -7664,22 +9200,24 @@ hterm.Screen.prototype.insertString = function(str) {
  * It is also up to the caller to properly maintain the line overflow state
  * using hterm.Screen..commitLineOverflow().
  */
-hterm.Screen.prototype.overwriteString = function(str) {
+hterm.Screen.prototype.overwriteString = function(str, wcwidth=undefined) {
   var maxLength = this.columnCount_ - this.cursorPosition.column;
   if (!maxLength)
     return [str];
 
-  var width = lib.wc.strWidth(str);
+  if (wcwidth === undefined)
+    wcwidth = lib.wc.strWidth(str);
+
   if (this.textAttributes.matchesContainer(this.cursorNode_) &&
       this.cursorNode_.textContent.substr(this.cursorOffset_) == str) {
     // This overwrite would be a no-op, just move the cursor and return.
-    this.cursorOffset_ += width;
-    this.cursorPosition.column += width;
+    this.cursorOffset_ += wcwidth;
+    this.cursorPosition.column += wcwidth;
     return;
   }
 
-  this.deleteChars(Math.min(width, maxLength));
-  this.insertString(str);
+  this.deleteChars(Math.min(wcwidth, maxLength));
+  this.insertString(str, wcwidth);
 };
 
 /**
@@ -7705,21 +9243,34 @@ hterm.Screen.prototype.deleteChars = function(count) {
   var startLength, endLength;
 
   while (node && count) {
+    // Sanity check so we don't loop forever, but we don't also go quietly.
+    if (count < 0) {
+      console.error(`Deleting ${rv} chars went negative: ${count}`);
+      break;
+    }
+
     startLength = hterm.TextAttributes.nodeWidth(node);
     node.textContent = hterm.TextAttributes.nodeSubstr(node, 0, offset) +
         hterm.TextAttributes.nodeSubstr(node, offset + count);
     endLength = hterm.TextAttributes.nodeWidth(node);
-    count -= startLength - endLength;
-    if (offset < startLength && endLength && startLength == endLength) {
+
+    // Deal with splitting wide characters.  There are two ways: we could delete
+    // the first column or the second column.  In both cases, we delete the wide
+    // character and replace one of the columns with a space (since the other
+    // was deleted).  If there are more chars to delete, the next loop will pick
+    // up the slack.
+    if (node.wcNode && offset < startLength &&
+        ((endLength && startLength == endLength) || (!endLength && offset == 1))) {
       // No characters were deleted when there should be.  We're probably trying
       // to delete one column width from a wide character node.  We remove the
       // wide character node here and replace it with a single space.
       var spaceNode = this.textAttributes.createContainer(' ');
-      node.parentNode.insertBefore(spaceNode, node.nextSibling);
+      node.parentNode.insertBefore(spaceNode, offset ? node : node.nextSibling);
       node.textContent = '';
       endLength = 0;
       count -= 1;
-    }
+    } else
+      count -= startLength - endLength;
 
     var nextNode = node.nextSibling;
     if (endLength == 0 && node != this.cursorNode_) {
@@ -7730,7 +9281,8 @@ hterm.Screen.prototype.deleteChars = function(count) {
   }
 
   // Remove this.cursorNode_ if it is an empty non-text node.
-  if (this.cursorNode_.nodeType != 3 && !this.cursorNode_.textContent) {
+  if (this.cursorNode_.nodeType != Node.TEXT_NODE &&
+      !this.cursorNode_.textContent) {
     var cursorNode = this.cursorNode_;
     if (cursorNode.previousSibling) {
       this.cursorNode_ = cursorNode.previousSibling;
@@ -7840,6 +9392,10 @@ hterm.Screen.prototype.getPositionWithOverflow_ = function(row, node, offset) {
  **/
 hterm.Screen.prototype.getPositionWithinRow_ = function(row, node, offset) {
   if (node.parentNode != row) {
+    // If we traversed to the top node, then there's nothing to find here.
+    if (node.parentNode == null)
+      return -1;
+
     return this.getPositionWithinRow_(node.parentNode, node, offset) +
            this.getPositionWithinRow_(row, node.parentNode, 0);
   }
@@ -7946,10 +9502,10 @@ hterm.Screen.prototype.expandSelection = function(selection) {
   if (endPosition == -1)
     return;
 
-  // Matches can start with '~' or '.', since paths frequently do.
-  var leftMatch   = '[^\\s\\[\\](){}<>"\'\\^!@#$%&*,;:`]';
-  var rightMatch  = '[^\\s\\[\\](){}<>"\'\\^!@#$%&*,;:~.`]';
-  var insideMatch = '[^\\s\\[\\](){}<>"\'\\^]*';
+  // Use the user configurable match settings.
+  var leftMatch   = this.wordBreakMatchLeft;
+  var rightMatch  = this.wordBreakMatchRight;
+  var insideMatch = this.wordBreakMatchMiddle;
 
   //Move start to the left.
   var rowText = this.getLineText_(row);
@@ -7980,7 +9536,7 @@ hterm.Screen.prototype.expandSelection = function(selection) {
 
 'use strict';
 
-lib.rtdep('hterm.PubSub', 'hterm.Size');
+lib.rtdep('lib.f', 'hterm.PubSub', 'hterm.Size');
 
 /**
  * A 'viewport' view of fixed-height rows with support for selection and
@@ -8040,13 +9596,18 @@ hterm.ScrollPort = function(rowProvider) {
   // syncScrollHeight().
   this.lastRowCount_ = 0;
 
+  // The scroll wheel pixel delta multiplier to increase/decrease
+  // the scroll speed of mouse wheel events. See: https://goo.gl/sXelnq
+  this.scrollWheelMultiplier_ = 1;
+
+  // The last touch events we saw to support touch based scrolling.  Indexed
+  // by touch identifier since we can have more than one touch active.
+  this.lastTouch_ = {};
+
   /**
    * True if the last scroll caused the scrollport to show the final row.
    */
   this.isScrolledEnd = true;
-
-  // The css rule that we use to control the height of a row.
-  this.xrowCssRule_ = null;
 
   /**
    * A guess at the current scrollbar width, fixed in resize().
@@ -8266,29 +9827,56 @@ hterm.ScrollPort.prototype.decorate = function(div) {
       'height: 100%;' +
       'width: 100%;' +
       'overflow: hidden;' +
+      'cursor: var(--hterm-mouse-cursor-style);' +
       '-webkit-user-select: none;' +
       '-moz-user-select: none;');
 
-  var style = doc.createElement('style');
-  style.textContent = 'x-row {}';
-  doc.head.appendChild(style);
+  if (this.DEBUG_) {
+    // When we're debugging we add padding to the body so that the offscreen
+    // elements are visible.
+    this.document_.body.style.paddingTop =
+        this.document_.body.style.paddingBottom =
+        'calc(var(--hterm-charsize-height) * 3)';
+  }
 
-  this.xrowCssRule_ = doc.styleSheets[0].cssRules[0];
-  this.xrowCssRule_.style.display = 'block';
+  var style = doc.createElement('style');
+  style.textContent = (
+      'x-row {' +
+      '  display: block;' +
+      '  height: var(--hterm-charsize-height);' +
+      '  line-height: var(--hterm-charsize-height);' +
+      '}');
+  doc.head.appendChild(style);
 
   this.userCssLink_ = doc.createElement('link');
   this.userCssLink_.setAttribute('rel', 'stylesheet');
 
+  this.userCssText_ = doc.createElement('style');
+  doc.head.appendChild(this.userCssText_);
+
   // TODO(rginda): Sorry, this 'screen_' isn't the same thing as hterm.Screen
   // from screen.js.  I need to pick a better name for one of them to avoid
   // the collision.
+  // We make this field editable even though we don't actually allow anything
+  // to be edited here so that Chrome will do the right thing with virtual
+  // keyboards and IMEs.  But make sure we turn off all the input helper logic
+  // that doesn't make sense here, and might inadvertently mung or save input.
+  // Some of these attributes are standard while others are browser specific,
+  // but should be safely ignored by other browsers.
   this.screen_ = doc.createElement('x-screen');
+  this.screen_.setAttribute('contenteditable', 'true');
+  this.screen_.setAttribute('spellcheck', 'false');
+  this.screen_.setAttribute('autocomplete', 'off');
+  this.screen_.setAttribute('autocorrect', 'off');
+  this.screen_.setAttribute('autocaptalize', 'none');
   this.screen_.setAttribute('role', 'textbox');
   this.screen_.setAttribute('tabindex', '-1');
   this.screen_.style.cssText = (
+      'caret-color: transparent;' +
       'display: block;' +
       'font-family: monospace;' +
       'font-size: 15px;' +
+      'font-variant-ligatures: none;' +
       'height: 100%;' +
       'overflow-y: scroll; overflow-x: hidden;' +
       'white-space: pre;' +
@@ -8298,14 +9886,20 @@ hterm.ScrollPort.prototype.decorate = function(div) {
   doc.body.appendChild(this.screen_);
 
   this.screen_.addEventListener('scroll', this.onScroll_.bind(this));
-  this.screen_.addEventListener('mousewheel', this.onScrollWheel_.bind(this));
+  this.screen_.addEventListener('wheel', this.onScrollWheel_.bind(this));
+  this.screen_.addEventListener('touchstart', this.onTouch_.bind(this));
+  this.screen_.addEventListener('touchmove', this.onTouch_.bind(this));
+  this.screen_.addEventListener('touchend', this.onTouch_.bind(this));
+  this.screen_.addEventListener('touchcancel', this.onTouch_.bind(this));
   this.screen_.addEventListener('copy', this.onCopy_.bind(this));
   this.screen_.addEventListener('paste', this.onPaste_.bind(this));
+  this.screen_.addEventListener('drop', this.onDragAndDrop_.bind(this));
 
   doc.body.addEventListener('keydown', this.onBodyKeyDown_.bind(this));
 
   // This is the main container for the fixed rows.
   this.rowNodes_ = doc.createElement('div');
+  this.rowNodes_.id = 'hterm:row-nodes';
   this.rowNodes_.style.cssText = (
       'display: block;' +
       'position: fixed;' +
@@ -8319,6 +9913,7 @@ hterm.ScrollPort.prototype.decorate = function(div) {
   this.topSelectBag_.style.cssText = (
       'display: block;' +
       'overflow: hidden;' +
+      'height: var(--hterm-charsize-height);' +
       'white-space: pre;');
 
   this.bottomSelectBag_ = this.topSelectBag_.cloneNode();
@@ -8327,10 +9922,12 @@ hterm.ScrollPort.prototype.decorate = function(div) {
   // only used to hold rows that are part of the selection but are currently
   // scrolled off the top or bottom of the visible range.
   this.topFold_ = doc.createElement('x-fold');
+  this.topFold_.id = 'hterm:top-fold-for-row-selection';
   this.topFold_.style.cssText = 'display: block;';
   this.rowNodes_.appendChild(this.topFold_);
 
   this.bottomFold_ = this.topFold_.cloneNode();
+  this.bottomFold_.id = 'hterm:bottom-fold-for-row-selection';
   this.rowNodes_.appendChild(this.bottomFold_);
 
   // This hidden div accounts for the vertical space that would be consumed by
@@ -8343,6 +9940,7 @@ hterm.ScrollPort.prototype.decorate = function(div) {
   // select and scroll at the same time).  Without this, the selection gets
   // out of whack.
   this.scrollArea_ = doc.createElement('div');
+  this.scrollArea_.id = 'hterm:scrollarea';
   this.scrollArea_.style.cssText = 'visibility: hidden';
   this.screen_.appendChild(this.scrollArea_);
 
@@ -8350,9 +9948,11 @@ hterm.ScrollPort.prototype.decorate = function(div) {
   // placed in the outermost document for currentScale to be correct.
   // TODO(rginda): This means that hterm nested in an iframe will not correctly
   // detect browser zoom level.  We should come up with a better solution.
-  this.svg_ = this.div_.ownerDocument.createElementNS(
-      'http://www.w3.org/2000/svg', 'svg');
-  this.svg_.setAttribute('xmlns', 'http://www.w3.org/2000/svg');
+  // Note: This must be http:// else Chrome cannot create the element correctly.
+  var xmlns = 'http://www.w3.org/2000/svg';
+  this.svg_ = this.div_.ownerDocument.createElementNS(xmlns, 'svg');
+  this.svg_.id = 'hterm:zoom-detector';
+  this.svg_.setAttribute('xmlns', xmlns);
   this.svg_.setAttribute('version', '1.1');
   this.svg_.style.cssText = (
       'position: absolute;' +
@@ -8364,6 +9964,7 @@ hterm.ScrollPort.prototype.decorate = function(div) {
   // We send focus to this element just before a paste happens, so we can
   // capture the pasted text and forward it on to someone who cares.
   this.pasteTarget_ = doc.createElement('textarea');
+  this.pasteTarget_.id = 'hterm:ctrl-v-paste-target';
   this.pasteTarget_.setAttribute('tabindex', '-1');
   this.pasteTarget_.style.cssText = (
     'position: absolute;' +
@@ -8410,7 +10011,7 @@ hterm.ScrollPort.prototype.getFontFamily = function() {
  * Defaults to null, meaning no custom css is loaded.  Set it back to null or
  * the empty string to remove a previously applied custom css.
  */
-hterm.ScrollPort.prototype.setUserCss = function(url) {
+hterm.ScrollPort.prototype.setUserCssUrl = function(url) {
   if (url) {
     this.userCssLink_.setAttribute('href', url);
 
@@ -8419,6 +10020,10 @@ hterm.ScrollPort.prototype.setUserCss = function(url) {
   } else if (this.userCssLink_.parentNode) {
     this.document_.head.removeChild(this.userCssLink_);
   }
+};
+
+hterm.ScrollPort.prototype.setUserCssText = function(text) {
+  this.userCssText_.textContent = text;
 };
 
 hterm.ScrollPort.prototype.focus = function() {
@@ -8585,8 +10190,14 @@ hterm.ScrollPort.prototype.getFontSize = function() {
  * @return {hterm.Size} A new hterm.Size object.
  */
 hterm.ScrollPort.prototype.measureCharacterSize = function(opt_weight) {
+  // Number of lines used to average the height of a single character.
+  var numberOfLines = 100;
+  // Number of chars per line used to average the width of a single character.
+  var lineLength = 100;
+
   if (!this.ruler_) {
     this.ruler_ = this.document_.createElement('div');
+    this.ruler_.id = 'hterm:ruler-character-size';
     this.ruler_.style.cssText = (
         'position: absolute;' +
         'top: 0;' +
@@ -8598,14 +10209,13 @@ hterm.ScrollPort.prototype.measureCharacterSize = function(opt_weight) {
     // We need to put the text in a span to make the size calculation
     // work properly in Firefox
     this.rulerSpan_ = this.document_.createElement('span');
-    this.rulerSpan_.textContent = ('XXXXXXXXXXXXXXXXXXXX' +
-                                   'XXXXXXXXXXXXXXXXXXXX' +
-                                   'XXXXXXXXXXXXXXXXXXXX' +
-                                   'XXXXXXXXXXXXXXXXXXXX' +
-                                   'XXXXXXXXXXXXXXXXXXXX');
+    this.rulerSpan_.id = 'hterm:ruler-span-workaround';
+    this.rulerSpan_.innerHTML =
+        ('X'.repeat(lineLength) + '\r').repeat(numberOfLines);
     this.ruler_.appendChild(this.rulerSpan_);
 
     this.rulerBaseline_ = this.document_.createElement('span');
+    this.rulerSpan_.id = 'hterm:ruler-baseline';
     // We want to collapse it on the baseline
     this.rulerBaseline_.style.fontSize = '0px';
     this.rulerBaseline_.textContent = 'X';
@@ -8616,8 +10226,8 @@ hterm.ScrollPort.prototype.measureCharacterSize = function(opt_weight) {
   this.rowNodes_.appendChild(this.ruler_);
   var rulerSize = hterm.getClientSize(this.rulerSpan_);
 
-  var size = new hterm.Size(rulerSize.width / this.ruler_.textContent.length,
-                            rulerSize.height);
+  var size = new hterm.Size(rulerSize.width / lineLength,
+                            rulerSize.height / numberOfLines);
 
   this.ruler_.appendChild(this.rulerBaseline_);
   size.baseline = this.rulerBaseline_.offsetTop;
@@ -8641,20 +10251,7 @@ hterm.ScrollPort.prototype.measureCharacterSize = function(opt_weight) {
 hterm.ScrollPort.prototype.syncCharacterSize = function() {
   this.characterSize = this.measureCharacterSize();
 
-  var lineHeight = this.characterSize.height + 'px';
-  this.xrowCssRule_.style.height = lineHeight;
-  this.topSelectBag_.style.height = lineHeight;
-  this.bottomSelectBag_.style.height = lineHeight;
-
   this.resize();
-
-  if (this.DEBUG_) {
-    // When we're debugging we add padding to the body so that the offscreen
-    // elements are visible.
-    this.document_.body.style.paddingTop =
-        this.document_.body.style.paddingBottom =
-        3 * this.characterSize.height + 'px';
-  }
 };
 
 /**
@@ -8688,8 +10285,8 @@ hterm.ScrollPort.prototype.syncRowNodesDimensions_ = function() {
 
   // We don't want to show a partial row because it would be distracting
   // in a terminal, so we floor any fractional row count.
-  this.visibleRowCount = Math.floor(
-      screenSize.height / this.characterSize.height);
+  this.visibleRowCount = lib.f.smartFloorDivide(
+      screenSize.height, this.characterSize.height);
 
   // Then compute the height of our integral number of rows.
   var visibleRowsHeight = this.visibleRowCount * this.characterSize.height;
@@ -9150,7 +10747,7 @@ hterm.ScrollPort.prototype.scrollRowToBottom = function(rowIndex) {
  * returns the row that *should* be at the top.
  */
 hterm.ScrollPort.prototype.getTopRowIndex = function() {
-  return Math.floor(this.screen_.scrollTop / this.characterSize.height);
+  return Math.round(this.screen_.scrollTop / this.characterSize.height);
 };
 
 /**
@@ -9208,7 +10805,10 @@ hterm.ScrollPort.prototype.onScrollWheel_ = function(e) {
   if (e.defaultPrevented)
     return;
 
-  var top = this.screen_.scrollTop - e.wheelDeltaY;
+  // Figure out how far this event wants us to scroll.
+  var delta = this.scrollWheelDelta(e);
+
+  var top = this.screen_.scrollTop - delta;
   if (top < 0)
     top = 0;
 
@@ -9228,6 +10828,110 @@ hterm.ScrollPort.prototype.onScrollWheel_ = function(e) {
 };
 
 /**
+ * Calculate how far a wheel event should scroll.
+ *
+ * @param {WheelEvent} e The mouse wheel event to process.
+ * @return {number} How far (in pixels) to scroll.
+ */
+hterm.ScrollPort.prototype.scrollWheelDelta = function(e) {
+  var delta;
+
+  switch (e.deltaMode) {
+    case WheelEvent.DOM_DELTA_PIXEL:
+      delta = e.deltaY * this.scrollWheelMultiplier_;
+      break;
+    case WheelEvent.DOM_DELTA_LINE:
+      delta = e.deltaY * this.characterSize.height;
+      break;
+    case WheelEvent.DOM_DELTA_PAGE:
+      delta = e.deltaY * this.characterSize.height * this.screen_.getHeight();
+      break;
+  }
+
+  // The sign is inverted from what we would expect.
+  return delta * -1;
+};
+
+
+/**
+ * Clients can override this if they want to hear touch events.
+ *
+ * Clients may call event.preventDefault() if they want to keep the scrollport
+ * from also handling the events.
+ */
+hterm.ScrollPort.prototype.onTouch = function(e) {};
+
+/**
+ * Handler for touch events.
+ */
+hterm.ScrollPort.prototype.onTouch_ = function(e) {
+  this.onTouch(e);
+
+  if (e.defaultPrevented)
+    return;
+
+  // Extract the fields from the Touch event that we need.  If we saved the
+  // event directly, it has references to other objects (like x-row) that
+  // might stick around for a long time.  This way we only have small objects
+  // in our lastTouch_ state.
+  var scrubTouch = function(t) {
+    return {
+      id: t.identifier,
+      y: t.clientY,
+      x: t.clientX,
+    };
+  };
+
+  var i, touch;
+  switch (e.type) {
+    case 'touchstart':
+      // Save the current set of touches.
+      for (i = 0; i < e.changedTouches.length; ++i) {
+        touch = scrubTouch(e.changedTouches[i]);
+        this.lastTouch_[touch.id] = touch;
+      }
+      break;
+
+    case 'touchcancel':
+    case 'touchend':
+      // Throw away existing touches that we're finished with.
+      for (i = 0; i < e.changedTouches.length; ++i)
+        delete this.lastTouch_[e.changedTouches[i].identifier];
+      break;
+
+    case 'touchmove':
+      // Walk all of the touches in this one event and merge all of their
+      // changes into one delta.  This lets multiple fingers scroll faster.
+      var delta = 0;
+      for (i = 0; i < e.changedTouches.length; ++i) {
+        touch = scrubTouch(e.changedTouches[i]);
+        delta += (this.lastTouch_[touch.id].y - touch.y);
+        this.lastTouch_[touch.id] = touch;
+      }
+
+      // Invert to match the touchscreen scrolling direction of browser windows.
+      delta *= -1;
+
+      var top = this.screen_.scrollTop - delta;
+      if (top < 0)
+        top = 0;
+
+      var scrollMax = this.getScrollMax_();
+      if (top > scrollMax)
+        top = scrollMax;
+
+      if (top != this.screen_.scrollTop) {
+        // Moving scrollTop causes a scroll event, which triggers the redraw.
+        this.screen_.scrollTop = top;
+      }
+      break;
+  }
+
+  // To disable gestures or anything else interfering with our scrolling.
+  e.preventDefault();
+};
+
+/**
  * Handler for resize events.
  *
  * The browser will resize us such that the top row stays at the top, but we
@@ -9236,7 +10940,6 @@ hterm.ScrollPort.prototype.onScrollWheel_ = function(e) {
 hterm.ScrollPort.prototype.onResize_ = function(e) {
   // Re-measure, since onResize also happens for browser zoom changes.
   this.syncCharacterSize();
-  this.resize();
 };
 
 /**
@@ -9325,6 +11028,8 @@ hterm.ScrollPort.prototype.onBodyKeyDown_ = function(e) {
 
 /**
  * Handle a paste event on the the ScrollPort's screen element.
+ *
+ * TODO: Handle ClipboardData.files transfers.  https://crbug.com/433581.
  */
 hterm.ScrollPort.prototype.onPaste_ = function(e) {
   this.pasteTarget_.focus();
@@ -9346,10 +11051,55 @@ hterm.ScrollPort.prototype.handlePasteTargetTextInput_ = function(e) {
 };
 
 /**
+ * Handle a drop event on the the ScrollPort's screen element.
+ *
+ * By default we try to copy in the structured format (HTML/whatever).
+ * The shift key can select plain text though.
+ *
+ * TODO: Handle DataTransfer.files transfers.  https://crbug.com/433581.
+ *
+ * @param {DragEvent} e The drag event that fired us.
+ */
+hterm.ScrollPort.prototype.onDragAndDrop_ = function(e) {
+  e.preventDefault();
+
+  let data;
+  let format;
+
+  // If the shift key isn't active, try to find a text source (but not plain
+  // text).  e.g. text/html is OK.
+  if (!e.shiftKey) {
+    e.dataTransfer.types.forEach((t) => {
+      if (!format && t != 'text/plain' && t.startsWith('text/'))
+        format = t;
+    });
+
+    // If we found a non-plain text source, try it out first.
+    if (format)
+      data = e.dataTransfer.getData(format);
+  }
+
+  // If we haven't loaded anything useful, fall back to plain text.
+  if (!data)
+    data = e.dataTransfer.getData('text/plain');
+
+  if (data)
+    this.publish('paste', {text: data});
+};
+
+/**
  * Set the vertical scrollbar mode of the ScrollPort.
  */
 hterm.ScrollPort.prototype.setScrollbarVisible = function(state) {
   this.screen_.style.overflowY = state ? 'scroll' : 'hidden';
+};
+
+/**
+ * Set scroll wheel multiplier. This alters how much the screen scrolls on
+ * mouse wheel events.
+ */
+hterm.ScrollPort.prototype.setScrollWheelMoveMultipler = function(multiplier) {
+  this.scrollWheelMultiplier_ = multiplier;
 };
 // SOURCE FILE: hterm/js/hterm_terminal.js
 // Copyright (c) 2012 The Chromium OS Authors. All rights reserved.
@@ -9359,7 +11109,7 @@ hterm.ScrollPort.prototype.setScrollbarVisible = function(state) {
 'use strict';
 
 lib.rtdep('lib.colors', 'lib.PreferenceManager', 'lib.resource', 'lib.wc',
-          'hterm.Keyboard', 'hterm.Options', 'hterm.PreferenceManager',
+          'lib.f', 'hterm.Keyboard', 'hterm.Options', 'hterm.PreferenceManager',
           'hterm.Screen', 'hterm.ScrollPort', 'hterm.Size',
           'hterm.TextAttributes', 'hterm.VT');
 
@@ -9451,13 +11201,14 @@ hterm.Terminal = function(opt_profileId) {
   this.foregroundColor_ = null;
   this.scrollOnOutput_ = null;
   this.scrollOnKeystroke_ = null;
+  this.scrollWheelArrowKeys_ = null;
 
-  // True if we should send mouse events to the vt, false if we want them
-  // to manage the local text selection.
-  this.reportMouseEvents_ = false;
+  // True if we should override mouse event reporting to allow local selection.
+  this.defeatMouseReports_ = false;
 
   // Terminal bell sound.
   this.bellAudio_ = this.document_.createElement('audio');
+  this.bellAudio_.id = 'hterm:bell-audio';
   this.bellAudio_.setAttribute('preload', 'auto');
 
   // All terminal bell notifications that have been generated (not necessarily
@@ -9479,7 +11230,7 @@ hterm.Terminal = function(opt_profileId) {
   // The VT escape sequence interpreter.
   this.vt = new hterm.VT(this);
 
-  // The keyboard hander.
+  // The keyboard handler.
   this.keyboard = new hterm.Keyboard(this);
 
   // General IO interface that can be given to third parties without exposing
@@ -9490,9 +11241,10 @@ hterm.Terminal = function(opt_profileId) {
   this.enableMouseDragScroll = true;
 
   this.copyOnSelect = null;
+  this.mouseRightClickPaste = null;
   this.mousePasteButton = null;
 
-  // Whether to use the default window copy behaviour.
+  // Whether to use the default window copy behavior.
   this.useDefaultWindowCopy = false;
 
   this.clearSelectionAfterCopy = true;
@@ -9500,8 +11252,10 @@ hterm.Terminal = function(opt_profileId) {
   this.realizeSize_(80, 24);
   this.setDefaultTabStops();
 
+  this.reportFocus = false;
+
   this.setProfile(opt_profileId || 'default',
-                  function() { this.onTerminalReady() }.bind(this));
+                  function() { this.onTerminalReady(); }.bind(this));
 };
 
 /**
@@ -9533,7 +11287,7 @@ hterm.Terminal.prototype.tabWidth = 8;
  * This will load the terminal preferences for the given profile name and
  * associate subsequent preference changes with the new preference profile.
  *
- * @param {string} newName The name of the preference profile.  Forward slash
+ * @param {string} profileId The name of the preference profile.  Forward slash
  *     characters will be removed from the name.
  * @param {function} opt_callback Optional callback to invoke when the profile
  *     transition is complete.
@@ -9548,6 +11302,25 @@ hterm.Terminal.prototype.setProfile = function(profileId, opt_callback) {
 
   this.prefs_ = new hterm.PreferenceManager(this.profileId_);
   this.prefs_.addObservers(null, {
+    'alt-gr-mode': function(v) {
+      if (v == null) {
+        if (navigator.language.toLowerCase() == 'en-us') {
+          v = 'none';
+        } else {
+          v = 'right-alt';
+        }
+      } else if (typeof v == 'string') {
+        v = v.toLowerCase();
+      } else {
+        v = 'none';
+      }
+
+      if (!/^(none|ctrl-alt|left-alt|right-alt)$/.test(v))
+        v = 'none';
+
+      terminal.keyboard.altGrMode = v;
+    },
+
     'alt-backspace-is-meta-backspace': function(v) {
       terminal.keyboard.altBackspaceIsMetaBackspace = v;
     },
@@ -9612,6 +11385,17 @@ hterm.Terminal.prototype.setProfile = function(profileId, opt_callback) {
       terminal.keyboard.backspaceSendsBackspace = v;
     },
 
+    'character-map-overrides': function(v) {
+      if (!(v == null || v instanceof Object)) {
+        console.warn('Preference character-map-modifications is not an ' +
+                     'object: ' + v);
+        return;
+      }
+
+      terminal.vt.characterMaps.reset();
+      terminal.vt.characterMaps.setOverrides(v);
+    },
+
     'cursor-blink': function(v) {
       terminal.setCursorBlink(!!v);
     },
@@ -9658,7 +11442,7 @@ hterm.Terminal.prototype.setProfile = function(profileId, opt_callback) {
         }
       }
 
-      terminal.primaryScreen_.textAttributes.resetColorPalette()
+      terminal.primaryScreen_.textAttributes.resetColorPalette();
       terminal.alternateScreen_.textAttributes.resetColorPalette();
     },
 
@@ -9704,6 +11488,10 @@ hterm.Terminal.prototype.setProfile = function(profileId, opt_callback) {
       terminal.alternateScreen_.textAttributes.enableBoldAsBright = !!v;
     },
 
+    'enable-blink': function(v) {
+      terminal.syncBlinkState();
+    },
+
     'enable-clipboard-write': function(v) {
       terminal.vt.enableClipboardWrite = !!v;
     },
@@ -9732,6 +11520,24 @@ hterm.Terminal.prototype.setProfile = function(profileId, opt_callback) {
       terminal.keyboard.homeKeysScroll = v;
     },
 
+    'keybindings': function(v) {
+      terminal.keyboard.bindings.clear();
+
+      if (!v)
+        return;
+
+      if (!(v instanceof Object)) {
+        console.error('Error in keybindings preference: Expected object');
+        return;
+      }
+
+      try {
+        terminal.keyboard.bindings.addBindings(v);
+      } catch (ex) {
+        console.error('Error in keybindings preference: ' + ex);
+      }
+    },
+
     'max-string-sequence': function(v) {
       terminal.vt.maxStringSequence = v;
     },
@@ -9742,6 +11548,10 @@ hterm.Terminal.prototype.setProfile = function(profileId, opt_callback) {
 
     'meta-sends-escape': function(v) {
       terminal.keyboard.metaSendsEscape = v;
+    },
+
+    'mouse-right-click-paste': function(v) {
+      terminal.mouseRightClickPaste = v;
     },
 
     'mouse-paste-button': function(v) {
@@ -9813,6 +11623,14 @@ hterm.Terminal.prototype.setProfile = function(profileId, opt_callback) {
       terminal.setScrollbarVisible(v);
     },
 
+    'scroll-wheel-may-send-arrow-keys': function(v) {
+      terminal.scrollWheelArrowKeys_ = v;
+    },
+
+    'scroll-wheel-move-multiplier': function(v) {
+      terminal.setScrollWheelMoveMultipler(v);
+    },
+
     'send-encoding': function(v) {
        if (!(/^(utf-8|raw)$/).test(v)) {
          console.warn('Invalid value for "send-encoding": ' + v);
@@ -9826,9 +11644,32 @@ hterm.Terminal.prototype.setProfile = function(profileId, opt_callback) {
       terminal.keyboard.shiftInsertPaste = v;
     },
 
+    'terminal-encoding': function(v) {
+      terminal.vt.setEncoding(v);
+    },
+
     'user-css': function(v) {
-      terminal.scrollPort_.setUserCss(v);
-    }
+      terminal.scrollPort_.setUserCssUrl(v);
+    },
+
+    'user-css-text': function(v) {
+      terminal.scrollPort_.setUserCssText(v);
+    },
+
+    'word-break-match-left': function(v) {
+      terminal.primaryScreen_.wordBreakMatchLeft = v;
+      terminal.alternateScreen_.wordBreakMatchLeft = v;
+    },
+
+    'word-break-match-right': function(v) {
+      terminal.primaryScreen_.wordBreakMatchRight = v;
+      terminal.alternateScreen_.wordBreakMatchRight = v;
+    },
+
+    'word-break-match-middle': function(v) {
+      terminal.primaryScreen_.wordBreakMatchMiddle = v;
+      terminal.alternateScreen_.wordBreakMatchMiddle = v;
+    },
   });
 
   this.prefs_.readStorage(function() {
@@ -9842,6 +11683,8 @@ hterm.Terminal.prototype.setProfile = function(profileId, opt_callback) {
 
 /**
  * Returns the preferences manager used for configuring this terminal.
+ *
+ * @return {hterm.PreferenceManager}
  */
 hterm.Terminal.prototype.getPrefs = function() {
   return this.prefs_;
@@ -9849,6 +11692,8 @@ hterm.Terminal.prototype.getPrefs = function() {
 
 /**
  * Enable or disable bracketed paste mode.
+ *
+ * @param {boolean} state The value to set.
  */
 hterm.Terminal.prototype.setBracketedPaste = function(state) {
   this.options_.bracketedPaste = state;
@@ -9859,6 +11704,8 @@ hterm.Terminal.prototype.setBracketedPaste = function(state) {
  *
  * If you want this setting to persist, set it through prefs_, rather than
  * with this method.
+ *
+ * @param {string} color The color to set.
  */
 hterm.Terminal.prototype.setCursorColor = function(color) {
   this.cursorColor_ = color;
@@ -9868,6 +11715,7 @@ hterm.Terminal.prototype.setCursorColor = function(color) {
 
 /**
  * Return the current cursor color as a string.
+ * @return {string}
  */
 hterm.Terminal.prototype.getCursorColor = function() {
   return this.cursorColor_;
@@ -9875,6 +11723,8 @@ hterm.Terminal.prototype.getCursorColor = function() {
 
 /**
  * Enable or disable mouse based text selection in the terminal.
+ *
+ * @param {boolean} state The value to set.
  */
 hterm.Terminal.prototype.setSelectionEnabled = function(state) {
   this.enableMouseDragScroll = state;
@@ -9885,6 +11735,8 @@ hterm.Terminal.prototype.setSelectionEnabled = function(state) {
  *
  * If you want this setting to persist, set it through prefs_, rather than
  * with this method.
+ *
+ * @param {string} color The color to set.
  */
 hterm.Terminal.prototype.setBackgroundColor = function(color) {
   this.backgroundColor_ = lib.colors.normalizeCSS(color);
@@ -9900,6 +11752,8 @@ hterm.Terminal.prototype.setBackgroundColor = function(color) {
  *
  * Intended for use by other classes, so we don't have to expose the entire
  * prefs_ object.
+ *
+ * @return {string}
  */
 hterm.Terminal.prototype.getBackgroundColor = function() {
   return this.backgroundColor_;
@@ -9910,6 +11764,8 @@ hterm.Terminal.prototype.getBackgroundColor = function() {
  *
  * If you want this setting to persist, set it through prefs_, rather than
  * with this method.
+ *
+ * @param {string} color The color to set.
  */
 hterm.Terminal.prototype.setForegroundColor = function(color) {
   this.foregroundColor_ = lib.colors.normalizeCSS(color);
@@ -9925,6 +11781,8 @@ hterm.Terminal.prototype.setForegroundColor = function(color) {
  *
  * Intended for use by other classes, so we don't have to expose the entire
  * prefs_ object.
+ *
+ * @return {string}
  */
 hterm.Terminal.prototype.getForegroundColor = function() {
   return this.foregroundColor_;
@@ -9961,6 +11819,8 @@ hterm.Terminal.prototype.runCommandClass = function(commandClass, argString) {
 
 /**
  * Returns true if the current screen is the primary screen, false otherwise.
+ *
+ * @return {boolean}
  */
 hterm.Terminal.prototype.isPrimaryScreen = function() {
   return this.screen_ == this.primaryScreen_;
@@ -9984,6 +11844,21 @@ hterm.Terminal.prototype.uninstallKeyboard = function() {
 }
 
 /**
+ * Set a CSS variable.
+ *
+ * Normally this is used to set variables in the hterm namespace.
+ *
+ * @param {string} name The variable to set.
+ * @param {string} value The value to assign to the variable.
+ * @param {string?} opt_prefix The variable namespace/prefix to use.
+ */
+hterm.Terminal.prototype.setCssVar = function(name, value,
+                                              opt_prefix='--hterm-') {
+  this.document_.documentElement.style.setProperty(
+      `${opt_prefix}${name}`, value);
+};
+
+/**
  * Set the font size for this terminal.
  *
  * Call setFontSize(0) to reset to the default font size.
@@ -9997,14 +11872,15 @@ hterm.Terminal.prototype.setFontSize = function(px) {
     px = this.prefs_.get('font-size');
 
   this.scrollPort_.setFontSize(px);
-  if (this.wcCssRule_) {
-    this.wcCssRule_.style.width = this.scrollPort_.characterSize.width * 2 +
-        'px';
-  }
+  this.setCssVar('charsize-width', this.scrollPort_.characterSize.width + 'px');
+  this.setCssVar('charsize-height',
+                 this.scrollPort_.characterSize.height + 'px');
 };
 
 /**
  * Get the current font size.
+ *
+ * @return {number}
  */
 hterm.Terminal.prototype.getFontSize = function() {
   return this.scrollPort_.getFontSize();
@@ -10012,6 +11888,8 @@ hterm.Terminal.prototype.getFontSize = function() {
 
 /**
  * Get the current font family.
+ *
+ * @return {string}
  */
 hterm.Terminal.prototype.getFontFamily = function() {
   return this.scrollPort_.getFontFamily();
@@ -10038,10 +11916,10 @@ hterm.Terminal.prototype.syncMousePasteButton = function() {
   }
 
   var ary = navigator.userAgent.match(/\(X11;\s+(\S+)/);
-  if (!ary || ary[2] == 'CrOS') {
-    this.mousePasteButton = 2;
+  if (!ary || ary[1] == 'CrOS') {
+    this.mousePasteButton = 1;  // Middle mouse button.
   } else {
-    this.mousePasteButton = 3;
+    this.mousePasteButton = 2;  // Right mouse button.
   }
 };
 
@@ -10072,6 +11950,24 @@ hterm.Terminal.prototype.syncBoldSafeState = function() {
 };
 
 /**
+ * Enable or disable blink based on the enable-blink pref.
+ */
+hterm.Terminal.prototype.syncBlinkState = function() {
+  this.setCssVar('node-duration',
+                 this.prefs_.get('enable-blink') ? '0.7s' : '0');
+};
+
+/**
+ * Set the mouse cursor style based on the current terminal mode.
+ */
+hterm.Terminal.prototype.syncMouseStyle = function() {
+  this.setCssVar('mouse-cursor-style',
+                 this.vt.mouseReport == this.vt.MOUSE_REPORT_DISABLED ?
+                     'var(--hterm-mouse-cursor-text)' :
+                     'var(--hterm-mouse-cursor-pointer)');
+};
+
+/**
  * Return a copy of the current cursor position.
  *
  * @return {hterm.RowCol} The RowCol object representing the current position.
@@ -10080,10 +11976,20 @@ hterm.Terminal.prototype.saveCursor = function() {
   return this.screen_.cursorPosition.clone();
 };
 
+/**
+ * Return the current text attributes.
+ *
+ * @return {string}
+ */
 hterm.Terminal.prototype.getTextAttributes = function() {
   return this.screen_.textAttributes;
 };
 
+/**
+ * Set the text attributes.
+ *
+ * @param {string} textAttributes The attributes to set.
+ */
 hterm.Terminal.prototype.setTextAttributes = function(textAttributes) {
   this.screen_.textAttributes = textAttributes;
 };
@@ -10099,6 +12005,8 @@ hterm.Terminal.prototype.getZoomFactor = function() {
 
 /**
  * Change the title of this terminal's window.
+ *
+ * @param {string} title The title to set.
  */
 hterm.Terminal.prototype.setWindowTitle = function(title) {
   window.document.title = title;
@@ -10128,6 +12036,8 @@ hterm.Terminal.prototype.clearCursorOverflow = function() {
 
 /**
  * Sets the cursor shape
+ *
+ * @param {string} shape The shape to set.
  */
 hterm.Terminal.prototype.setCursorShape = function(shape) {
   this.cursorShape_ = shape;
@@ -10136,6 +12046,8 @@ hterm.Terminal.prototype.setCursorShape = function(shape) {
 
 /**
  * Get the cursor shape
+ *
+ * @return {string}
  */
 hterm.Terminal.prototype.getCursorShape = function() {
   return this.cursorShape_;
@@ -10143,6 +12055,8 @@ hterm.Terminal.prototype.getCursorShape = function() {
 
 /**
  * Set the width of the terminal, resizing the UI to match.
+ *
+ * @param {number} columnCount
  */
 hterm.Terminal.prototype.setWidth = function(columnCount) {
   if (columnCount == null) {
@@ -10159,6 +12073,8 @@ hterm.Terminal.prototype.setWidth = function(columnCount) {
 
 /**
  * Set the height of the terminal, resizing the UI to match.
+ *
+ * @param {number} rowCount The height in rows.
  */
 hterm.Terminal.prototype.setHeight = function(rowCount) {
   if (rowCount == null) {
@@ -10175,6 +12091,8 @@ hterm.Terminal.prototype.setHeight = function(rowCount) {
 /**
  * Deal with terminal size changes.
  *
+ * @param {number} columnCount The number of columns.
+ * @param {number} rowCount The number of rows.
  */
 hterm.Terminal.prototype.realizeSize_ = function(columnCount, rowCount) {
   if (columnCount != this.screenSize.width)
@@ -10197,6 +12115,8 @@ hterm.Terminal.prototype.realizeSize_ = function(columnCount, rowCount) {
  *
  * Relying on the browser to send us an async resize event means we may not be
  * in the correct state yet when the next escape sequence hits.
+ *
+ * @param {number} columnCount The number of columns.
  */
 hterm.Terminal.prototype.realizeWidth_ = function(columnCount) {
   if (columnCount <= 0)
@@ -10232,6 +12152,8 @@ hterm.Terminal.prototype.realizeWidth_ = function(columnCount) {
  *
  * Relying on the browser to send us an async resize event means we may not be
  * in the correct state yet when the next escape sequence hits.
+ *
+ * @param {number} rowCount The number of rows.
  */
 hterm.Terminal.prototype.realizeHeight_ = function(rowCount) {
   if (rowCount <= 0)
@@ -10317,6 +12239,22 @@ hterm.Terminal.prototype.scrollPageDown = function() {
 };
 
 /**
+ * Scroll the terminal one line up relative to the current position.
+ */
+hterm.Terminal.prototype.scrollLineUp = function() {
+  var i = this.scrollPort_.getTopRowIndex();
+  this.scrollPort_.scrollRowToTop(i - 1);
+};
+
+/**
+ * Scroll the terminal one line down relative to the current position.
+ */
+hterm.Terminal.prototype.scrollLineDown = function() {
+  var i = this.scrollPort_.getTopRowIndex();
+  this.scrollPort_.scrollRowToTop(i + 1);
+};
+
+/**
  * Clear primary screen, secondary screen, and the scrollback buffer.
  */
 hterm.Terminal.prototype.wipeContents = function() {
@@ -10364,6 +12302,9 @@ hterm.Terminal.prototype.reset = function() {
 hterm.Terminal.prototype.softReset = function() {
   // Reset terminal options to their default values.
   this.options_ = new hterm.Options();
+
+  // We show the cursor on soft reset but do not alter the blink state.
+  this.options_.cursorBlink = !!this.timeouts_.cursorBlink;
 
   // Xterm also resets the color palette on soft reset, even though it doesn't
   // seem to be documented anywhere.
@@ -10418,7 +12359,7 @@ hterm.Terminal.prototype.backwardTabStop = function() {
 /**
  * Set a tab stop at the given column.
  *
- * @param {int} column Zero based column.
+ * @param {integer} column Zero based column.
  */
 hterm.Terminal.prototype.setTabStop = function(column) {
   for (var i = this.tabStops_.length - 1; i >= 0; i--) {
@@ -10467,7 +12408,7 @@ hterm.Terminal.prototype.clearAllTabStops = function() {
  * This does not clear the existing tab stops first, use clearAllTabStops
  * for that.
  *
- * @param {int} opt_start Optional starting zero based starting column, useful
+ * @param {integer} opt_start Optional starting zero based starting column, useful
  *     for filling out missing tab stops when the terminal is resized.
  */
 hterm.Terminal.prototype.setDefaultTabStops = function(opt_start) {
@@ -10507,7 +12448,8 @@ hterm.Terminal.prototype.decorate = function(div) {
   this.scrollPort_.setBackgroundSize(this.prefs_.get('background-size'));
   this.scrollPort_.setBackgroundPosition(
       this.prefs_.get('background-position'));
-  this.scrollPort_.setUserCss(this.prefs_.get('user-css'));
+  this.scrollPort_.setUserCssUrl(this.prefs_.get('user-css'));
+  this.scrollPort_.setUserCssText(this.prefs_.get('user-css-text'));
 
   this.div_.focus = this.focus.bind(this);
 
@@ -10515,10 +12457,12 @@ hterm.Terminal.prototype.decorate = function(div) {
   this.syncFontFamily();
 
   this.setScrollbarVisible(this.prefs_.get('scrollbar-visible'));
+  this.setScrollWheelMoveMultipler(
+      this.prefs_.get('scroll-wheel-move-multiplier'));
 
   this.document_ = this.scrollPort_.getDocument();
 
-  this.document_.body.oncontextmenu = function() { return false };
+  this.document_.body.oncontextmenu = function() { return false; };
 
   var onMouse = this.onMouse_.bind(this);
   var screenNode = this.scrollPort_.getScreenNode();
@@ -10549,22 +12493,43 @@ hterm.Terminal.prototype.decorate = function(div) {
        '.wc-node {' +
        '  display: inline-block;' +
        '  text-align: center;' +
-       '  width: ' + this.scrollPort_.characterSize.width * 2 + 'px;' +
+       '  width: calc(var(--hterm-charsize-width) * 2);' +
+       '  line-height: var(--hterm-charsize-height);' +
+       '}' +
+       ':root {' +
+       '  --hterm-charsize-width: ' + this.scrollPort_.characterSize.width + 'px;' +
+       '  --hterm-charsize-height: ' + this.scrollPort_.characterSize.height + 'px;' +
+       // Default position hides the cursor for when the window is initializing.
+       '  --hterm-cursor-offset-col: -1;' +
+       '  --hterm-cursor-offset-row: -1;' +
+       '  --hterm-blink-node-duration: 0.7s;' +
+       '  --hterm-mouse-cursor-text: text;' +
+       '  --hterm-mouse-cursor-pointer: default;' +
+       '  --hterm-mouse-cursor-style: var(--hterm-mouse-cursor-text);' +
+       '}' +
+       '@keyframes blink {' +
+       '  from { opacity: 1.0; }' +
+       '  to { opacity: 0.0; }' +
+       '}' +
+       '.blink-node {' +
+       '  animation-name: blink;' +
+       '  animation-duration: var(--hterm-blink-node-duration);' +
+       '  animation-iteration-count: infinite;' +
+       '  animation-timing-function: ease-in-out;' +
+       '  animation-direction: alternate;' +
        '}');
   this.document_.head.appendChild(style);
 
-  var styleSheets = this.document_.styleSheets;
-  var cssRules = styleSheets[styleSheets.length - 1].cssRules;
-  this.wcCssRule_ = cssRules[cssRules.length - 1];
-
   this.cursorNode_ = this.document_.createElement('div');
+  this.cursorNode_.id = 'hterm:terminal-cursor';
   this.cursorNode_.className = 'cursor-node';
   this.cursorNode_.style.cssText =
       ('position: absolute;' +
-       'top: -99px;' +
+       'left: calc(var(--hterm-charsize-width) * var(--hterm-cursor-offset-col));' +
+       'top: calc(var(--hterm-charsize-height) * var(--hterm-cursor-offset-row));' +
        'display: block;' +
-       'width: ' + this.scrollPort_.characterSize.width + 'px;' +
-       'height: ' + this.scrollPort_.characterSize.height + 'px;' +
+       'width: var(--hterm-charsize-width);' +
+       'height: var(--hterm-charsize-height);' +
        '-webkit-transition: opacity, background-color 100ms linear;' +
        '-moz-transition: opacity, background-color 100ms linear;');
 
@@ -10582,6 +12547,7 @@ hterm.Terminal.prototype.decorate = function(div) {
   //
   // It's a hack, but it's the cleanest way I could find.
   this.scrollBlockerNode_ = this.document_.createElement('div');
+  this.scrollBlockerNode_.id = 'hterm:mouse-drag-scroll-blocker';
   this.scrollBlockerNode_.style.cssText =
       ('position: absolute;' +
        'top: -99px;' +
@@ -10590,7 +12556,6 @@ hterm.Terminal.prototype.decorate = function(div) {
        'height: 10px;');
   this.document_.body.appendChild(this.scrollBlockerNode_);
 
-  var onMouse = this.onMouse_.bind(this);
   this.scrollPort_.onScrollWheel = onMouse;
   ['mousedown', 'mouseup', 'mousemove', 'click', 'dblclick',
    ].forEach(function(event) {
@@ -10611,6 +12576,8 @@ hterm.Terminal.prototype.decorate = function(div) {
 
 /**
  * Return the HTML document that contains the terminal DOM nodes.
+ *
+ * @return {HTMLDocument}
  */
 hterm.Terminal.prototype.getDocument = function() {
   return this.document_;
@@ -10634,7 +12601,7 @@ hterm.Terminal.prototype.focus = function() {
  *
  * @param {integer} index The zero-based row index, measured relative to the
  *     start of the scrollback buffer.  On-screen rows will always have the
- *     largest indicies.
+ *     largest indices.
  * @return {HTMLElement} The 'x-row' element containing for the requested row.
  */
 hterm.Terminal.prototype.getRowNode = function(index) {
@@ -10654,7 +12621,7 @@ hterm.Terminal.prototype.getRowNode = function(index) {
  *
  * @param {integer} start The zero-based row index to start from, measured
  *     relative to the start of the scrollback buffer.  On-screen rows will
- *     always have the largest indicies.
+ *     always have the largest indices.
  * @param {integer} end The zero-based row index to end on, measured
  *     relative to the start of the scrollback buffer.
  * @return {string} A single string containing the text value of the range of
@@ -10681,7 +12648,7 @@ hterm.Terminal.prototype.getRowsText = function(start, end) {
  *
  * @param {integer} index The zero-based row index to return, measured
  *     relative to the start of the scrollback buffer.  On-screen rows will
- *     always have the largest indicies.
+ *     always have the largest indices.
  * @return {string} A string containing the text value of the selected row.
  */
 hterm.Terminal.prototype.getRowText = function(index) {
@@ -10716,6 +12683,8 @@ hterm.Terminal.prototype.getRowCount = function() {
  * be using moveRows() in cases where they would matter.
  *
  * The cursor will be positioned at column 0 of the first inserted line.
+ *
+ * @param {number} count The number of rows to created.
  */
 hterm.Terminal.prototype.appendRows_ = function(count) {
   var cursorRow = this.screen_.rowsArray.length;
@@ -10750,6 +12719,10 @@ hterm.Terminal.prototype.appendRows_ = function(count) {
  * In this case, the blank lines scrolled into the scroll region are made of
  * the nodes we scrolled off.  These have their rowIndex properties carefully
  * renumbered so as not to confuse the ScrollPort.
+ *
+ * @param {number} fromIndex The start index.
+ * @param {number} count The number of rows to move.
+ * @param {number} toIndex The destination index.
  */
 hterm.Terminal.prototype.moveRows_ = function(fromIndex, count, toIndex) {
   var ary = this.screen_.removeRows(fromIndex, count);
@@ -10771,10 +12744,14 @@ hterm.Terminal.prototype.moveRows_ = function(fromIndex, count, toIndex) {
 /**
  * Renumber the rowIndex property of the given range of rows.
  *
- * The start and end indicies are relative to the screen, not the scrollback.
+ * The start and end indices are relative to the screen, not the scrollback.
  * Rows in the scrollback buffer cannot be renumbered.  Since they are not
  * addressable (you can't delete them, scroll them, etc), you should have
  * no need to renumber scrollback rows.
+ *
+ * @param {number} start The start index.
+ * @param {number} end The end index.
+ * @param {hterm.Screen} opt_screen The screen to renumber.
  */
 hterm.Terminal.prototype.renumberRows_ = function(start, end, opt_screen) {
   var screen = opt_screen || this.screen_;
@@ -10801,6 +12778,10 @@ hterm.Terminal.prototype.print = function(str) {
   var startOffset = 0;
 
   var strWidth = lib.wc.strWidth(str);
+  // Fun edge case: If the string only contains zero width codepoints (like
+  // combining characters), we make sure to iterate at least once below.
+  if (strWidth == 0 && str)
+    strWidth = 1;
 
   while (startOffset < strWidth) {
     if (this.options_.wraparound && this.screen_.cursorPosition.overflow) {
@@ -10830,15 +12811,16 @@ hterm.Terminal.prototype.print = function(str) {
 
     var tokens = hterm.TextAttributes.splitWidecharString(substr);
     for (var i = 0; i < tokens.length; i++) {
-      if (tokens[i].wcNode)
-        this.screen_.textAttributes.wcNode = true;
+      this.screen_.textAttributes.wcNode = tokens[i].wcNode;
+      this.screen_.textAttributes.asciiNode = tokens[i].asciiNode;
 
       if (this.options_.insertMode) {
-          this.screen_.insertString(tokens[i].str);
+        this.screen_.insertString(tokens[i].str, tokens[i].wcStrWidth);
       } else {
-        this.screen_.overwriteString(tokens[i].str);
+        this.screen_.overwriteString(tokens[i].str, tokens[i].wcStrWidth);
       }
       this.screen_.textAttributes.wcNode = false;
+      this.screen_.textAttributes.asciiNode = true;
     }
 
     this.screen_.maybeClipCurrentRow();
@@ -10900,7 +12882,7 @@ hterm.Terminal.prototype.getVTScrollTop = function() {
  * restrict scrolling to some higher row.  It is used for some VT cursor
  * positioning and scrolling commands.
  *
- * @return {integer} The bottommost row in the terminal's scroll region.
+ * @return {integer} The bottom most row in the terminal's scroll region.
  */
 hterm.Terminal.prototype.getVTScrollBottom = function() {
   if (this.vtScrollBottom_ != null)
@@ -10993,7 +12975,8 @@ hterm.Terminal.prototype.reverseLineFeed = function() {
 hterm.Terminal.prototype.eraseToLeft = function() {
   var cursor = this.saveCursor();
   this.setCursorColumn(0);
-  this.screen_.overwriteString(lib.f.getWhitespace(cursor.column + 1));
+  const count = cursor.column + 1;
+  this.screen_.overwriteString(lib.f.getWhitespace(count), count);
   this.restoreCursor(cursor);
 };
 
@@ -11011,6 +12994,8 @@ hterm.Terminal.prototype.eraseToLeft = function() {
  * eraseToRight is ignored in the presence of a cursor overflow.  This deviates
  * from xterm, but agrees with gnome-terminal and konsole, xfce4-terminal.  See
  * crbug.com/232390 for details.
+ *
+ * @param {number} opt_count The number of characters to erase.
  */
 hterm.Terminal.prototype.eraseToRight = function(opt_count) {
   if (this.screen_.cursorPosition.overflow)
@@ -11031,7 +13016,7 @@ hterm.Terminal.prototype.eraseToRight = function(opt_count) {
   }
 
   var cursor = this.saveCursor();
-  this.screen_.overwriteString(lib.f.getWhitespace(count));
+  this.screen_.overwriteString(lib.f.getWhitespace(count), count);
   this.restoreCursor(cursor);
   this.clearCursorOverflow();
 };
@@ -11103,7 +13088,7 @@ hterm.Terminal.prototype.fill = function(ch) {
   for (var row = 0; row < this.screenSize.height; row++) {
     for (var col = 0; col < this.screenSize.width; col++) {
       this.setAbsoluteCursorPosition(row, col);
-      this.screen_.overwriteString(ch);
+      this.screen_.overwriteString(ch, 1);
     }
   }
 
@@ -11182,6 +13167,8 @@ hterm.Terminal.prototype.insertLines = function(count) {
  *
  * New rows are added to the bottom of scroll region to take their place.  New
  * rows are strictly there to take up space and have no content or style.
+ *
+ * @param {number} count The number of lines to delete.
  */
 hterm.Terminal.prototype.deleteLines = function(count) {
   var cursor = this.saveCursor();
@@ -11209,12 +13196,14 @@ hterm.Terminal.prototype.deleteLines = function(count) {
  * Inserts the given number of spaces at the current cursor position.
  *
  * The cursor position is not changed.
+ *
+ * @param {number} count The number of spaces to insert.
  */
 hterm.Terminal.prototype.insertSpace = function(count) {
   var cursor = this.saveCursor();
 
   var ws = lib.f.getWhitespace(count || 1);
-  this.screen_.insertString(ws);
+  this.screen_.insertString(ws, ws.length);
   this.screen_.maybeClipCurrentRow();
 
   this.restoreCursor(cursor);
@@ -11301,6 +13290,12 @@ hterm.Terminal.prototype.setCursorPosition = function(row, column) {
   }
 };
 
+/**
+ * Move the cursor relative to its current position.
+ *
+ * @param {number} row
+ * @param {number} column
+ */
 hterm.Terminal.prototype.setRelativeCursorPosition = function(row, column) {
   var scrollTop = this.getVTScrollTop();
   row = lib.f.clamp(row + scrollTop, scrollTop, this.getVTScrollBottom());
@@ -11308,6 +13303,12 @@ hterm.Terminal.prototype.setRelativeCursorPosition = function(row, column) {
   this.screen_.setCursorPosition(row, column);
 };
 
+/**
+ * Move the cursor to the specified position.
+ *
+ * @param {number} row
+ * @param {number} column
+ */
 hterm.Terminal.prototype.setAbsoluteCursorPosition = function(row, column) {
   row = lib.f.clamp(row, 0, this.screenSize.height - 1);
   column = lib.f.clamp(column, 0, this.screenSize.width - 1);
@@ -11349,7 +13350,7 @@ hterm.Terminal.prototype.setAbsoluteCursorRow = function(row) {
  *
  * @return {integer} The zero-based cursor row.
  */
-hterm.Terminal.prototype.getCursorRow = function(row) {
+hterm.Terminal.prototype.getCursorRow = function() {
   return this.screen_.cursorPosition.row;
 };
 
@@ -11485,6 +13486,8 @@ hterm.Terminal.prototype.cursorRight = function(count) {
  * TODO(rginda): Test xterm to see if reverse is respected for text that has
  * been drawn with attributes that happen to coincide with the default
  * 'no-attribute' colors.  My guess is probably not.
+ *
+ * @param {boolean} state The state to set.
  */
 hterm.Terminal.prototype.setReverseVideo = function(state) {
   this.options_.reverseVideo = state;
@@ -11508,7 +13511,7 @@ hterm.Terminal.prototype.ringBell = function() {
 
   var self = this;
   setTimeout(function() {
-      self.cursorNode_.style.backgroundColor = self.prefs_.get('cursor-color');
+      self.restyleCursor_();
     }, 200);
 
   // bellSquelchTimeout_ affects both audio and notification bells.
@@ -11525,9 +13528,7 @@ hterm.Terminal.prototype.ringBell = function() {
   }
 
   if (this.desktopNotificationBell_ && !this.document_.hasFocus()) {
-    var n = new Notification(
-        lib.f.replaceVars(hterm.desktopNotificationTitle,
-                          {'title': window.document.title || 'hterm'}));
+    var n = hterm.notify();
     this.bellNotificationList_.push(n);
     // TODO: Should we try to raise the window here?
     n.onclick = function() { self.closeBellNotifications_(); };
@@ -11571,6 +13572,8 @@ hterm.Terminal.prototype.setInsertMode = function(state) {
  * If auto carriage return is on then a formfeed character is interpreted
  * as a newline, otherwise it's the same as a linefeed.  The difference boils
  * down to whether or not the cursor column is reset.
+ *
+ * @param {boolean} state The state to set.
  */
 hterm.Terminal.prototype.setAutoCarriageReturn = function(state) {
   this.options_.autoCarriageReturn = state;
@@ -11682,6 +13685,10 @@ hterm.Terminal.prototype.setCursorVisible = function(state) {
   this.options_.cursorVisible = state;
 
   if (!state) {
+    if (this.timeouts_.cursorBlink) {
+      clearTimeout(this.timeouts_.cursorBlink);
+      delete this.timeouts_.cursorBlink;
+    }
     this.cursorNode_.style.opacity = '0';
     return;
   }
@@ -11715,7 +13722,7 @@ hterm.Terminal.prototype.syncCursorPosition_ = function() {
 
   if (cursorRowIndex > bottomRowIndex) {
     // Cursor is scrolled off screen, move it outside of the visible area.
-    this.cursorNode_.style.top = -this.scrollPort_.characterSize.height + 'px';
+    this.setCssVar('cursor-offset-row', '-1');
     return;
   }
 
@@ -11725,16 +13732,18 @@ hterm.Terminal.prototype.syncCursorPosition_ = function() {
     this.cursorNode_.style.display = '';
   }
 
-
-  this.cursorNode_.style.top = this.scrollPort_.visibleRowTopMargin +
-      this.scrollPort_.characterSize.height * (cursorRowIndex - topRowIndex) +
-      'px';
-  this.cursorNode_.style.left = this.scrollPort_.characterSize.width *
-      this.screen_.cursorPosition.column + 'px';
+  // Position the cursor using CSS variable math.  If we do the math in JS,
+  // the float math will end up being more precise than the CSS which will
+  // cause the cursor tracking to be off.
+  this.setCssVar(
+      'cursor-offset-row',
+      `${cursorRowIndex - topRowIndex} + ` +
+      `${this.scrollPort_.visibleRowTopMargin}px`);
+  this.setCssVar('cursor-offset-col', this.screen_.cursorPosition.column);
 
   this.cursorNode_.setAttribute('title',
-                                '(' + this.screen_.cursorPosition.row +
-                                ', ' + this.screen_.cursorPosition.column +
+                                '(' + this.screen_.cursorPosition.column +
+                                ', ' + this.screen_.cursorPosition.row +
                                 ')');
 
   // Update the caret for a11y purposes.
@@ -11757,11 +13766,9 @@ hterm.Terminal.prototype.restyleCursor_ = function() {
 
   var style = this.cursorNode_.style;
 
-  style.width = this.scrollPort_.characterSize.width + 'px';
-
   switch (shape) {
     case hterm.Terminal.cursorShape.BEAM:
-      style.height = this.scrollPort_.characterSize.height + 'px';
+      style.height = 'var(--hterm-charsize-height)';
       style.backgroundColor = 'transparent';
       style.borderBottomStyle = null;
       style.borderLeftStyle = 'solid';
@@ -11776,7 +13783,7 @@ hterm.Terminal.prototype.restyleCursor_ = function() {
       break;
 
     default:
-      style.height = this.scrollPort_.characterSize.height + 'px';
+      style.height = 'var(--hterm-charsize-height)';
       style.backgroundColor = this.cursorColor_;
       style.borderBottomStyle = null;
       style.borderLeftStyle = null;
@@ -11815,6 +13822,7 @@ hterm.Terminal.prototype.showZoomWarning_ = function(state) {
       return;
 
     this.zoomWarningNode_ = this.document_.createElement('div');
+    this.zoomWarningNode_.id = 'hterm:zoom-warning';
     this.zoomWarningNode_.style.cssText = (
         'color: black;' +
         'background-color: #ff2222;' +
@@ -11829,6 +13837,10 @@ hterm.Terminal.prototype.showZoomWarning_ = function(state) {
         '-webkit-user-select: none;' +
         '-moz-text-size-adjust: none;' +
         '-moz-user-select: none;');
+
+    this.zoomWarningNode_.addEventListener('click', function(e) {
+      this.parentNode.removeChild(this);
+    });
   }
 
   this.zoomWarningNode_.textContent = lib.MessageManager.replaceReferences(
@@ -11899,42 +13911,53 @@ hterm.Terminal.prototype.showOverlay = function(msg, opt_timeout) {
   this.overlayNode_.style.left = (divSize.width - overlaySize.width -
       this.scrollPort_.currentScrollbarWidthPx) / 2 + 'px';
 
-  var self = this;
-
   if (this.overlayTimeout_)
     clearTimeout(this.overlayTimeout_);
 
   if (opt_timeout === null)
     return;
 
-  this.overlayTimeout_ = setTimeout(function() {
-      self.overlayNode_.style.opacity = '0';
-      self.overlayTimeout_ = setTimeout(function() {
-          if (self.overlayNode_.parentNode)
-            self.overlayNode_.parentNode.removeChild(self.overlayNode_);
-          self.overlayTimeout_ = null;
-          self.overlayNode_.style.opacity = '0.75';
-        }, 200);
-    }, opt_timeout || 1500);
+  this.overlayTimeout_ = setTimeout(() => {
+    this.overlayNode_.style.opacity = '0';
+    this.overlayTimeout_ = setTimeout(() => this.hideOverlay(), 200);
+  }, opt_timeout || 1500);
+};
+
+/**
+ * Hide the terminal overlay immediately.
+ *
+ * Useful when we show an overlay for an event with an unknown end time.
+ */
+hterm.Terminal.prototype.hideOverlay = function() {
+  if (this.overlayTimeout_)
+    clearTimeout(this.overlayTimeout_);
+  this.overlayTimeout_ = null;
+
+  if (this.overlayNode_.parentNode)
+    this.overlayNode_.parentNode.removeChild(this.overlayNode_);
+  this.overlayNode_.style.opacity = '0.75';
 };
 
 /**
  * Paste from the system clipboard to the terminal.
  */
 hterm.Terminal.prototype.paste = function() {
-  hterm.pasteFromClipboard(this.document_);
+  return hterm.pasteFromClipboard(this.document_);
 };
 
 /**
  * Copy a string to the system clipboard.
  *
  * Note: If there is a selected range in the terminal, it'll be cleared.
+ *
+ * @param {string} str The string to copy.
  */
 hterm.Terminal.prototype.copyStringToClipboard = function(str) {
   if (this.prefs_.get('enable-clipboard-notice'))
     setTimeout(this.showOverlay.bind(this, hterm.notifyCopyMessage, 500), 200);
 
   var copySource = this.document_.createElement('pre');
+  copySource.id = 'hterm:copy-to-clipboard-source';
   copySource.textContent = str;
   copySource.style.cssText = (
       '-webkit-user-select: text;' +
@@ -11964,6 +13987,11 @@ hterm.Terminal.prototype.copyStringToClipboard = function(str) {
   copySource.parentNode.removeChild(copySource);
 };
 
+/**
+ * Returns the selected text, or null if no text is selected.
+ *
+ * @return {string|null}
+ */
 hterm.Terminal.prototype.getSelectionText = function() {
   var selection = this.scrollPort_.selection;
   selection.sync();
@@ -11995,7 +14023,7 @@ hterm.Terminal.prototype.getSelectionText = function() {
   // End offset measures from the end of the line.
   var endOffset = (hterm.TextAttributes.nodeWidth(selection.endNode) -
                    selection.endOffset);
-  var node = selection.endNode;
+  node = selection.endNode;
 
   if (node.nodeName != 'X-ROW') {
     // If the selection doesn't end on an x-row node, then it must be
@@ -12045,11 +14073,66 @@ hterm.Terminal.prototype.onVTKeystroke = function(string) {
 };
 
 /**
+ * Launches url in a new tab.
+ *
+ * @param {string} url URL to launch in a new tab.
+ */
+hterm.Terminal.prototype.openUrl = function(url) {
+  if (window.chrome && window.chrome.browser) {
+    // For Chrome v2 apps, we need to use this API to properly open windows.
+    chrome.browser.openTab({'url': url});
+  } else {
+    var win = window.open(url, '_blank');
+    win.focus();
+  }
+}
+
+/**
+ * Open the selected url.
+ */
+hterm.Terminal.prototype.openSelectedUrl_ = function() {
+  var str = this.getSelectionText();
+
+  // If there is no selection, try and expand wherever they clicked.
+  if (str == null) {
+    this.screen_.expandSelection(this.document_.getSelection());
+    str = this.getSelectionText();
+
+    // If clicking in empty space, return.
+    if (str == null)
+      return;
+  }
+
+  // Make sure URL is valid before opening.
+  if (str.length > 2048 || str.search(/[\s\[\](){}<>"'\\^`]/) >= 0)
+    return;
+
+  // If the URI isn't anchored, it'll open relative to the extension.
+  // We have no way of knowing the correct schema, so assume http.
+  if (str.search('^[a-zA-Z][a-zA-Z0-9+.-]*://') < 0) {
+    // We have to whitelist a few protocols that lack authorities and thus
+    // never use the //.  Like mailto.
+    switch (str.split(':', 1)[0]) {
+      case 'mailto':
+        break;
+      default:
+        str = 'http://' + str;
+        break;
+    }
+  }
+
+  this.openUrl(str);
+}
+
+
+/**
  * Add the terminalRow and terminalColumn properties to mouse events and
  * then forward on to onMouse().
  *
  * The terminalRow and terminalColumn properties contain the (row, column)
  * coordinates for the mouse event.
+ *
+ * @param {Event} e The mouse event to handle.
  */
 hterm.Terminal.prototype.onMouse_ = function(e) {
   if (e.processedByTerminalHandler_) {
@@ -12062,6 +14145,9 @@ hterm.Terminal.prototype.onMouse_ = function(e) {
     // we decorate the event object with this property instead.
     return;
   }
+
+  var reportMouseEvents = (!this.defeatMouseReports_ &&
+      this.vt.mouseReport != this.vt.MOUSE_REPORT_DISABLED);
 
   e.processedByTerminalHandler_ = true;
 
@@ -12076,8 +14162,7 @@ hterm.Terminal.prototype.onMouse_ = function(e) {
     return;
   }
 
-  if (this.options_.cursorVisible &&
-      this.vt.mouseReport == this.vt.MOUSE_REPORT_DISABLED) {
+  if (this.options_.cursorVisible && !reportMouseEvents) {
     // If the cursor is visible and we're not sending mouse events to the
     // host app, then we want to hide the terminal cursor when the mouse
     // cursor is over top.  This keeps the terminal cursor from interfering
@@ -12091,32 +14176,47 @@ hterm.Terminal.prototype.onMouse_ = function(e) {
   }
 
   if (e.type == 'mousedown') {
-    if (e.altKey || this.vt.mouseReport == this.vt.MOUSE_REPORT_DISABLED) {
+    if (e.altKey || !reportMouseEvents) {
       // If VT mouse reporting is disabled, or has been defeated with
       // alt-mousedown, then the mouse will act on the local selection.
-      this.reportMouseEvents_ = false;
+      this.defeatMouseReports_ = true;
       this.setSelectionEnabled(true);
     } else {
       // Otherwise we defer ownership of the mouse to the VT.
-      this.reportMouseEvents_ = true;
+      this.defeatMouseReports_ = false;
       this.document_.getSelection().collapseToEnd();
       this.setSelectionEnabled(false);
       e.preventDefault();
     }
   }
 
-  if (!this.reportMouseEvents_) {
-    if (e.type == 'dblclick') {
+  if (!reportMouseEvents) {
+    if (e.type == 'dblclick' && this.copyOnSelect) {
       this.screen_.expandSelection(this.document_.getSelection());
-      hterm.copySelectionToClipboard(this.document_);
+      this.copySelectionToClipboard(this.document_);
     }
 
-    if (e.type == 'mousedown' && e.which == this.mousePasteButton)
-      this.paste();
+    if (e.type == 'click' && !e.shiftKey && (e.ctrlKey || e.metaKey)) {
+      // Debounce this event with the dblclick event.  If you try to doubleclick
+      // a URL to open it, Chrome will fire click then dblclick, but we won't
+      // have expanded the selection text at the first click event.
+      clearTimeout(this.timeouts_.openUrl);
+      this.timeouts_.openUrl = setTimeout(this.openSelectedUrl_.bind(this),
+                                          500);
+      return;
+    }
 
-    if (e.type == 'mouseup' && e.which == 1 && this.copyOnSelect &&
+    if (e.type == 'mousedown') {
+      if ((this.mouseRightClickPaste && e.button == 2 /* right button */) ||
+          e.button == this.mousePasteButton) {
+        if (!this.paste())
+          console.warn('Could not paste manually due to web restrictions');
+      }
+    }
+
+    if (e.type == 'mouseup' && e.button == 0 && this.copyOnSelect &&
         !this.document_.getSelection().isCollapsed) {
-      hterm.copySelectionToClipboard(this.document_);
+      this.copySelectionToClipboard(this.document_);
     }
 
     if ((e.type == 'mousemove' || e.type == 'mouseup') &&
@@ -12126,6 +14226,20 @@ hterm.Terminal.prototype.onMouse_ = function(e) {
       this.scrollBlockerNode_.style.top = '-99px';
     }
 
+    // Emulate arrow key presses via scroll wheel events.
+    if (this.scrollWheelArrowKeys_ && !e.shiftKey &&
+        this.keyboard.applicationCursor && !this.isPrimaryScreen()) {
+      if (e.type == 'wheel') {
+        var delta = this.scrollPort_.scrollWheelDelta(e);
+        var lines = lib.f.smartFloorDivide(
+            Math.abs(delta), this.scrollPort_.characterSize.height);
+
+        var data = '\x1bO' + (delta < 0 ? 'B' : 'A');
+        this.io.sendString(data.repeat(lines));
+
+        e.preventDefault();
+      }
+    }
   } else /* if (this.reportMouseEvents) */ {
     if (!this.scrollBlockerNode_.engaged) {
       if (e.type == 'mousedown') {
@@ -12149,8 +14263,7 @@ hterm.Terminal.prototype.onMouse_ = function(e) {
     // Restore this on mouseup in case it was temporarily defeated with a
     // alt-mousedown.  Only do this when the selection is empty so that
     // we don't immediately kill the users selection.
-    this.reportMouseEvents_ = (this.vt.mouseReport !=
-                               this.vt.MOUSE_REPORT_DISABLED);
+    this.defeatMouseReports_ = false;
   }
 };
 
@@ -12159,15 +14272,24 @@ hterm.Terminal.prototype.onMouse_ = function(e) {
  *
  * The event parameter will be a normal DOM mouse click event with additional
  * 'terminalRow' and 'terminalColumn' properties.
+ *
+ * @param {Event} e The mouse event to handle.
  */
 hterm.Terminal.prototype.onMouse = function(e) { };
 
 /**
  * React when focus changes.
+ *
+ * @param {boolean} focused True if focused, false otherwise.
  */
 hterm.Terminal.prototype.onFocusChange_ = function(focused) {
   this.cursorNode_.setAttribute('focus', focused);
   this.restyleCursor_();
+
+  if (this.reportFocus) {
+    this.io.sendString(focused === true ? '\x1b[I' : '\x1b[O')
+  }
+
   if (focused === true)
     this.closeBellNotifications_();
 };
@@ -12181,6 +14303,8 @@ hterm.Terminal.prototype.onScroll_ = function() {
 
 /**
  * React when text is pasted into the scrollPort.
+ *
+ * @param {Event} e The DOM paste event to handle.
  */
 hterm.Terminal.prototype.onPaste_ = function(e) {
   var data = e.text.replace(/\n/mg, '\r');
@@ -12193,6 +14317,8 @@ hterm.Terminal.prototype.onPaste_ = function(e) {
 
 /**
  * React when the user tries to copy from the scrollPort.
+ *
+ * @param {Event} e The DOM copy event.
  */
 hterm.Terminal.prototype.onCopy_ = function(e) {
   if (!this.useDefaultWindowCopy) {
@@ -12211,14 +14337,16 @@ hterm.Terminal.prototype.onCopy_ = function(e) {
  */
 hterm.Terminal.prototype.onResize_ = function() {
   var columnCount = Math.floor(this.scrollPort_.getScreenWidth() /
-                               this.scrollPort_.characterSize.width);
-  var rowCount = Math.floor(this.scrollPort_.getScreenHeight() /
-                            this.scrollPort_.characterSize.height);
+                               this.scrollPort_.characterSize.width) || 0;
+  var rowCount = lib.f.smartFloorDivide(this.scrollPort_.getScreenHeight(),
+                            this.scrollPort_.characterSize.height) || 0;
 
   if (columnCount <= 0 || rowCount <= 0) {
     // We avoid these situations since they happen sometimes when the terminal
     // gets removed from the document or during the initial load, and we can't
     // deal with that.
+    // This can also happen if called before the scrollPort calculates the
+    // character size, meaning we dived by 0 above and default to 0 values.
     return;
   }
 
@@ -12273,6 +14401,18 @@ hterm.Terminal.prototype.setScrollbarVisible = function(state) {
 };
 
 /**
+ * Set the scroll wheel move multiplier.  This will affect how fast the page
+ * scrolls on wheel events.
+ *
+ * Defaults to 1.
+ *
+ * @param {number} multiplier The multiplier to set.
+ */
+hterm.Terminal.prototype.setScrollWheelMoveMultipler = function(multiplier) {
+  this.scrollPort_.setScrollWheelMoveMultipler(multiplier);
+};
+
+/**
  * Close all web notifications created by terminal bells.
  */
 hterm.Terminal.prototype.closeBellNotifications_ = function() {
@@ -12316,6 +14456,9 @@ hterm.Terminal.IO = function(terminal) {
 
   // The IO object to restore on IO.pop().
   this.previousIO_ = null;
+
+  // Any data this object accumulated while not active.
+  this.buffered_ = '';
 };
 
 /**
@@ -12333,6 +14476,15 @@ hterm.Terminal.IO = function(terminal) {
  */
 hterm.Terminal.IO.prototype.showOverlay = function(message, opt_timeout) {
   this.terminal_.showOverlay(message, opt_timeout);
+};
+
+/**
+ * Hide the current overlay immediately.
+ *
+ * Useful when we show an overlay for an event with an unknown end time.
+ */
+hterm.Terminal.IO.prototype.hideOverlay = function() {
+  this.terminal_.hideOverlay();
 };
 
 /**
@@ -12380,9 +14532,25 @@ hterm.Terminal.IO.prototype.push = function() {
 
 /**
  * Restore the Terminal's previous IO object.
+ *
+ * We'll flush out any queued data.
  */
 hterm.Terminal.IO.prototype.pop = function() {
   this.terminal_.io = this.previousIO_;
+  this.previousIO_.flush();
+};
+
+/**
+ * Flush accumulated data.
+ *
+ * If we're not the active IO, the connected process might still be writing
+ * data to us, but we won't be displaying it.  Flush any buffered data now.
+ */
+hterm.Terminal.IO.prototype.flush = function() {
+  if (this.buffered_) {
+    this.terminal_.interpret(this.buffered_);
+    this.buffered_ = '';
+  }
 };
 
 /**
@@ -12441,8 +14609,13 @@ hterm.Terminal.IO.prototype.onTerminalResize = function(width, height) {
  * @param {string} string The UTF-8 encoded string to print.
  */
 hterm.Terminal.IO.prototype.writeUTF8 = function(string) {
-  if (this.terminal_.io != this)
-    throw 'Attempt to print from inactive IO object.';
+  // If another process has the foreground IO, buffer new data sent to this IO
+  // (since it's in the background).  When we're made the foreground IO again,
+  // we'll flush everything.
+  if (this.terminal_.io != this) {
+    this.buffered_ += string;
+    return;
+  }
 
   this.terminal_.interpret(string);
 };
@@ -12453,10 +14626,7 @@ hterm.Terminal.IO.prototype.writeUTF8 = function(string) {
  * @param {string} string The UTF-8 encoded string to print.
  */
 hterm.Terminal.IO.prototype.writelnUTF8 = function(string) {
-  if (this.terminal_.io != this)
-    throw 'Attempt to print from inactive IO object.';
-
-  this.terminal_.interpret(string + '\r\n');
+  this.writeUTF8(string + '\r\n');
 };
 
 /**
@@ -12491,7 +14661,7 @@ lib.rtdep('lib.colors');
  * Constructor for TextAttribute objects.
  *
  * These objects manage a set of text attributes such as foreground/
- * background color, bold, italic, blink and underline.
+ * background color, bold, faint, italic, blink, underline, and strikethrough.
  *
  * TextAttribute instances can be used to construct a DOM container implementing
  * the current attributes, or to test an existing DOM container for
@@ -12518,13 +14688,19 @@ hterm.TextAttributes = function(document) {
   this.defaultForeground = 'rgb(255, 255, 255)';
   this.defaultBackground = 'rgb(0, 0, 0)';
 
+  // Any attributes added here that do not default to falsey (e.g. undefined or
+  // null) require a bit more care.  createContainer has to always attach the
+  // attribute so matchesContainer can work correctly.
   this.bold = false;
+  this.faint = false;
   this.italic = false;
   this.blink = false;
   this.underline = false;
+  this.strikethrough = false;
   this.inverse = false;
   this.invisible = false;
   this.wcNode = false;
+  this.asciiNode = true;
   this.tileData = null;
 
   this.colorPalette = null;
@@ -12549,7 +14725,7 @@ hterm.TextAttributes.prototype.enableBoldAsBright = true;
 /**
  * A sentinel constant meaning "whatever the default color is in this context".
  */
-hterm.TextAttributes.prototype.DEFAULT_COLOR = new String('');
+hterm.TextAttributes.prototype.DEFAULT_COLOR = lib.f.createEnum('');
 
 /**
  * A constant string used to specify that source color is context default.
@@ -12600,12 +14776,15 @@ hterm.TextAttributes.prototype.reset = function() {
   this.foreground = this.DEFAULT_COLOR;
   this.background = this.DEFAULT_COLOR;
   this.bold = false;
+  this.faint = false;
   this.italic = false;
   this.blink = false;
   this.underline = false;
+  this.strikethrough = false;
   this.inverse = false;
   this.invisible = false;
   this.wcNode = false;
+  this.asciiNode = true;
 };
 
 /**
@@ -12625,12 +14804,15 @@ hterm.TextAttributes.prototype.isDefault = function() {
   return (this.foregroundSource == this.SRC_DEFAULT &&
           this.backgroundSource == this.SRC_DEFAULT &&
           !this.bold &&
+          !this.faint &&
           !this.italic &&
           !this.blink &&
           !this.underline &&
+          !this.strikethrough &&
           !this.inverse &&
           !this.invisible &&
           !this.wcNode &&
+          this.asciiNode &&
           this.tileData == null);
 };
 
@@ -12650,11 +14832,17 @@ hterm.TextAttributes.prototype.isDefault = function() {
  *     attributes.
  */
 hterm.TextAttributes.prototype.createContainer = function(opt_textContent) {
-  if (this.isDefault())
-    return this.document_.createTextNode(opt_textContent);
+  if (this.isDefault()) {
+    // Only attach attributes where we need an explicit default for the
+    // matchContainer logic below.
+    const node = this.document_.createTextNode(opt_textContent);
+    node.asciiNode = true;
+    return node;
+  }
 
   var span = this.document_.createElement('span');
   var style = span.style;
+  var classes = [];
 
   if (this.foreground != this.DEFAULT_COLOR)
     style.color = this.foreground;
@@ -12665,28 +14853,47 @@ hterm.TextAttributes.prototype.createContainer = function(opt_textContent) {
   if (this.enableBold && this.bold)
     style.fontWeight = 'bold';
 
+  if (this.faint)
+    span.faint = true;
+
   if (this.italic)
     style.fontStyle = 'italic';
 
-  if (this.blink)
-    style.fontStyle = 'italic';
-
-  if (this.underline)
-    style.textDecoration = 'underline';
-
-  if (this.wcNode) {
-    span.className = 'wc-node';
-    span.wcNode = true;
+  if (this.blink) {
+    classes.push('blink-node');
+    span.blinkNode = true;
   }
 
+  var textDecoration = '';
+  if (this.underline) {
+    textDecoration += ' underline';
+    span.underline = true;
+  }
+  if (this.strikethrough) {
+    textDecoration += ' line-through';
+    span.strikethrough = true;
+  }
+  if (textDecoration) {
+    style.textDecoration = textDecoration;
+  }
+
+  if (this.wcNode) {
+    classes.push('wc-node');
+    span.wcNode = true;
+  }
+  span.asciiNode = this.asciiNode;
+
   if (this.tileData != null) {
-    // This could be a wcNode too, so we add to the className here.
-    span.className += ' tile tile_' + this.tileData;
+    classes.push('tile');
+    classes.push('tile_' + this.tileData);
     span.tileNode = true;
   }
 
   if (opt_textContent)
     span.textContent = opt_textContent;
+
+  if (classes.length)
+    span.className = classes.join(' ');
 
   return span;
 };
@@ -12705,20 +14912,26 @@ hterm.TextAttributes.prototype.createContainer = function(opt_textContent) {
  *     this attributes instance.
  */
 hterm.TextAttributes.prototype.matchesContainer = function(obj) {
-  if (typeof obj == 'string' || obj.nodeType == 3)
+  if (typeof obj == 'string' || obj.nodeType == Node.TEXT_NODE)
     return this.isDefault();
 
   var style = obj.style;
 
   // We don't want to put multiple characters in a wcNode or a tile.
   // See the comments in createContainer.
+  // For attributes that default to false, we do not require that obj have them
+  // declared, so always normalize them using !! (to turn undefined into false)
+  // in the compares below.
   return (!(this.wcNode || obj.wcNode) &&
+          this.asciiNode == obj.asciiNode &&
           !(this.tileData != null || obj.tileNode) &&
           this.foreground == style.color &&
           this.background == style.backgroundColor &&
           (this.enableBold && this.bold) == !!style.fontWeight &&
-          (this.blink || this.italic) == !!style.fontStyle &&
-          this.underline == !!style.textDecoration);
+          this.blink == !!obj.blinkNode &&
+          this.italic == !!style.fontStyle &&
+          !!this.underline == !!obj.underline &&
+          !!this.strikethrough == !!obj.strikethrough);
 };
 
 hterm.TextAttributes.prototype.setDefaults = function(foreground, background) {
@@ -12770,13 +14983,21 @@ hterm.TextAttributes.prototype.syncColors = function() {
     }
   }
 
-  if (this.invisible)
+  if (this.invisible) {
     foregroundSource = backgroundSource;
+    defaultForeground = this.defaultBackground;
+  }
 
   // Set fore/background colors unless already specified in rgb(r, g, b) form.
   if (foregroundSource != this.SRC_RGB) {
     this.foreground = ((foregroundSource == this.SRC_DEFAULT) ?
                        defaultForeground : this.colorPalette[foregroundSource]);
+  }
+
+  if (this.faint && !this.invisible) {
+    var colorToMakeFaint = ((this.foreground == this.DEFAULT_COLOR) ?
+                            this.defaultForeground : this.foreground);
+    this.foreground = lib.colors.mix(colorToMakeFaint, 'rgb(0, 0, 0)', 0.3333);
   }
 
   if (backgroundSource != this.SRC_RGB) {
@@ -12802,7 +15023,7 @@ hterm.TextAttributes.containersMatch = function(obj1, obj2) {
   if (obj1.nodeType != obj2.nodeType)
     return false;
 
-  if (obj1.nodeType == 3)
+  if (obj1.nodeType == Node.TEXT_NODE)
     return true;
 
   var style1 = obj1.style;
@@ -12824,7 +15045,7 @@ hterm.TextAttributes.containersMatch = function(obj1, obj2) {
  * @return {boolean} True if the object is unstyled.
  */
 hterm.TextAttributes.containerIsDefault = function(obj) {
-  return typeof obj == 'string'  || obj.nodeType == 3;
+  return typeof obj == 'string'  || obj.nodeType == Node.TEXT_NODE;
 };
 
 /**
@@ -12835,7 +15056,7 @@ hterm.TextAttributes.containerIsDefault = function(obj) {
  * @return {integer} The column width of the node's textContent.
  */
 hterm.TextAttributes.nodeWidth = function(node) {
-  if (node.wcNode) {
+  if (!node.asciiNode) {
     return lib.wc.strWidth(node.textContent);
   } else {
     return node.textContent.length;
@@ -12853,7 +15074,7 @@ hterm.TextAttributes.nodeWidth = function(node) {
  * @return {integer} The extracted substr of the node's textContent.
  */
 hterm.TextAttributes.nodeSubstr = function(node, start, width) {
-  if (node.wcNode) {
+  if (!node.asciiNode) {
     return lib.wc.substr(node.textContent, start, width);
   } else {
     return node.textContent.substr(start, width);
@@ -12871,12 +15092,12 @@ hterm.TextAttributes.nodeSubstr = function(node, start, width) {
  * @return {integer} The extracted substring of the node's textContent.
  */
 hterm.TextAttributes.nodeSubstring = function(node, start, end) {
-  if (node.wcNode) {
+  if (!node.asciiNode) {
     return lib.wc.substring(node.textContent, start, end);
   } else {
     return node.textContent.substring(start, end);
   }
-}
+};
 
 /**
  * Static method to split a string into contiguous runs of single-width
@@ -12885,32 +15106,62 @@ hterm.TextAttributes.nodeSubstring = function(node, start, end) {
  * @param {string} str The string to split.
  * @return {Array} An array of objects that contain substrings of str, where
  *     each substring is either a contiguous runs of single-width characters
- *     or a double-width character.  For object that contains a double-width
- *     character, its wcNode property is set to true.
+ *     or a double-width character.  For objects that contain a double-width
+ *     character, its wcNode property is set to true.  For objects that contain
+ *     only ASCII content, its asciiNode property is set to true.
  */
 hterm.TextAttributes.splitWidecharString = function(str) {
   var rv = [];
-  var base = 0, length = 0;
+  var base = 0, length = 0, wcStrWidth = 0, wcCharWidth;
+  var asciiNode = true;
 
-  for (var i = 0; i < str.length; i++) {
-    var c = str.charCodeAt(i);
-    if (c < 128 || lib.wc.charWidth(c) == 1) {
-      length++;
+  for (var i = 0; i < str.length;) {
+    var c = str.codePointAt(i);
+    var increment;
+    if (c < 128) {
+      wcStrWidth += 1;
+      length += 1;
+      increment = 1;
     } else {
-      if (length) {
-        rv.push({str: str.substr(base, length)});
+      increment = (c <= 0xffff) ? 1 : 2;
+      wcCharWidth = lib.wc.charWidth(c);
+      if (wcCharWidth <= 1) {
+        wcStrWidth += wcCharWidth;
+        length += increment;
+        asciiNode = false;
+      } else {
+        if (length) {
+          rv.push({
+            str: str.substr(base, length),
+            asciiNode: asciiNode,
+            wcStrWidth: wcStrWidth,
+          });
+          asciiNode = true;
+          wcStrWidth = 0;
+        }
+        rv.push({
+          str: str.substr(i, increment),
+          wcNode: true,
+          asciiNode: false,
+          wcStrWidth: 2,
+        });
+        base = i + increment;
+        length = 0;
       }
-      rv.push({str: str.substr(i, 1), wcNode: true});
-      base = i + 1;
-      length = 0;
     }
+    i += increment;
   }
 
-  if (length)
-    rv.push({str: str.substr(base, length)});
+  if (length) {
+    rv.push({
+      str: str.substr(base, length),
+      asciiNode: asciiNode,
+      wcStrWidth: wcStrWidth,
+    });
+  }
 
   return rv;
-}
+};
 // SOURCE FILE: hterm/js/hterm_vt.js
 // Copyright (c) 2012 The Chromium OS Authors. All rights reserved.
 // Use of this source code is governed by a BSD-style license that can be
@@ -12930,24 +15181,7 @@ lib.rtdep('lib.colors', 'lib.f', 'lib.UTF8Decoder',
  * This interpreter is intended to be compatible with xterm, though it
  * ignores some of the more esoteric escape sequences.
  *
- * Some sequences are marked "Will not implement", meaning that they aren't
- * considered relevant to hterm and will probably never be implemented.
- *
- * Others are marked "Not currently implemented", meaning that they are lower
- * priority items that may be useful to implement at some point.
- *
- * See also:
- *   [VT100] VT100 User Guide
- *           http://vt100.net/docs/vt100-ug/chapter3.html
- *   [VT510] VT510 Video Terminal Programmer Information
- *           http://vt100.net/docs/vt510-rm/contents
- *   [XTERM] Xterm Control Sequences
- *           http://invisible-island.net/xterm/ctlseqs/ctlseqs.html
- *   [CTRL]  Wikipedia: C0 and C1 Control Codes
- *           http://en.wikipedia.org/wiki/C0_and_C1_control_codes
- *   [CSI]   Wikipedia: ANSI Escape Code
- *           http://en.wikipedia.org/wiki/Control_Sequence_Introducer
- *   man 5 terminfo, man infocmp, infocmp -L xterm-new
+ * Control sequences are documented in hterm/doc/ControlSequences.md.
  *
  * @param {hterm.Terminal} terminal Terminal to use with the interpreter.
  */
@@ -12978,15 +15212,6 @@ hterm.VT = function(terminal) {
 
   // The amount of time we're willing to wait for the end of an OSC sequence.
   this.oscTimeLimit_ = 20000;
-
-  // Construct a regular expression to match the known one-byte control chars.
-  // This is used in parseUnknown_ to quickly scan a string for the next
-  // control character.
-  var cc1 = Object.keys(hterm.VT.CC1).map(
-      function(e) {
-        return '\\x' + lib.f.zpad(e.charCodeAt().toString(16), 2)
-      }).join('');
-  this.cc1Pattern_ = new RegExp('[' + cc1 + ']');
 
   // Decoder to maintain UTF-8 decode state.
   this.utf8Decoder_ = new lib.UTF8Decoder();
@@ -13032,16 +15257,28 @@ hterm.VT = function(terminal) {
   /**
    * If true, emit warnings when we encounter a control character or escape
    * sequence that we don't recognize or explicitly ignore.
+   *
+   * We disable this by default as the console logging can be expensive when
+   * dumping binary files (e.g. `cat /dev/zero`) to the point where you can't
+   * recover w/out restarting.
    */
-  this.warnUnimplemented = true;
+  this.warnUnimplemented = false;
+
+  /**
+   * The set of available character maps (used by G0...G3 below).
+   */
+  this.characterMaps = new hterm.VT.CharacterMaps();
 
   /**
    * The default G0...G3 character maps.
+   * We default to the US/ASCII map everywhere as that aligns with other
+   * terminals, and it makes it harder to accidentally switch to the graphics
+   * character map (Ctrl-N).  Any program that wants to use the graphics map
+   * will usually select it anyways since there's no guarantee what state any
+   * of the maps are in at any particular time.
    */
-  this.G0 = hterm.VT.CharacterMap.maps['B'];
-  this.G1 = hterm.VT.CharacterMap.maps['0'];
-  this.G2 = hterm.VT.CharacterMap.maps['B'];
-  this.G3 = hterm.VT.CharacterMap.maps['B'];
+  this.G0 = this.G1 = this.G2 = this.G3 =
+      this.characterMaps.getMap('B');
 
   /**
    * The 7-bit visible character set.
@@ -13060,6 +15297,21 @@ hterm.VT = function(terminal) {
    * contains the 94 bytes from 0xa1 to 0xfe.
    */
   this.GR = 'G0';
+
+  /**
+   * The current encoding of the terminal.
+   *
+   * We only support ECMA-35 and UTF-8, so go with a boolean here.
+   * The encoding can be locked too.
+   */
+  this.codingSystemUtf8_ = false;
+  this.codingSystemLocked_ = false;
+
+  // Construct a regular expression to match the known one-byte control chars.
+  // This is used in parseUnknown_ to quickly scan a string for the next
+  // control character.
+  this.cc1Pattern_ = null;
+  this.updateEncodingState_();
 
   // Saved state used in DECSC.
   //
@@ -13143,7 +15395,7 @@ hterm.VT.ParseState.prototype.resetArguments = function(opt_arg_zero) {
 /**
  * Get an argument as an integer.
  *
- * @param {number} argnum The argument number to retreive.
+ * @param {number} argnum The argument number to retrieve.
  */
 hterm.VT.ParseState.prototype.iarg = function(argnum, defaultValue) {
   var str = this.args[argnum];
@@ -13158,7 +15410,7 @@ hterm.VT.ParseState.prototype.iarg = function(argnum, defaultValue) {
 };
 
 /**
- * Advance the parse postion.
+ * Advance the parse position.
  *
  * @param {integer} count The number of bytes to advance.
  */
@@ -13237,10 +15489,10 @@ hterm.VT.CursorState.prototype.restore = function() {
 };
 
 hterm.VT.prototype.reset = function() {
-  this.G0 = hterm.VT.CharacterMap.maps['B'];
-  this.G1 = hterm.VT.CharacterMap.maps['0'];
-  this.G2 = hterm.VT.CharacterMap.maps['B'];
-  this.G3 = hterm.VT.CharacterMap.maps['B'];
+  this.G0 = this.characterMaps.getMap('B');
+  this.G1 = this.characterMaps.getMap('0');
+  this.G2 = this.characterMaps.getMap('B');
+  this.G3 = this.characterMaps.getMap('B');
 
   this.GL = 'G0';
   this.GR = 'G0';
@@ -13278,9 +15530,9 @@ hterm.VT.prototype.onTerminalMouse_ = function(e) {
   var y = String.fromCharCode(lib.f.clamp(e.terminalRow + 32, 32, 255));
 
   switch (e.type) {
-    case 'mousewheel':
+    case 'wheel':
       // Mouse wheel is treated as button 1 or 2 plus an additional 64.
-      b = ((e.wheelDeltaY > 0) ? 0 : 1) + 96;
+      b = (((e.deltaY * -1) > 0) ? 0 : 1) + 96;
       b |= mod;
       response = '\x1b[M' + String.fromCharCode(b) + x + y;
 
@@ -13290,7 +15542,7 @@ hterm.VT.prototype.onTerminalMouse_ = function(e) {
 
     case 'mousedown':
       // Buttons are encoded as button number plus 32.
-      var b = Math.min(e.which - 1, 2) + 32;
+      var b = Math.min(e.button, 2) + 32;
 
       // And mix in the modifier keys.
       b |= mod;
@@ -13304,9 +15556,27 @@ hterm.VT.prototype.onTerminalMouse_ = function(e) {
       break;
 
     case 'mousemove':
-      if (this.mouseReport == this.MOUSE_REPORT_DRAG && e.which) {
-        // Standard button bits.
-        b = 32 + Math.min(e.which - 1, 2);
+      if (this.mouseReport == this.MOUSE_REPORT_DRAG && e.buttons) {
+        // Standard button bits.  The XTerm protocol only reports the first
+        // button press (e.g. if left & right are pressed, right is ignored),
+        // and it only supports the first three buttons.  If none of them are
+        // pressed, then XTerm flags it as a release.  We'll do the same.
+        b = 32;
+
+        // Priority here matches XTerm: left, middle, right.
+        if (e.buttons & 0x1) {
+          // Report left button.
+          b += 0;
+        } else if (e.buttons & 0x4) {
+          // Report middle button.
+          b += 1;
+        } else if (e.buttons & 0x2) {
+          // Report right button.
+          b += 2;
+        } else {
+          // Release higher buttons.
+          b += 3;
+        }
 
         // Add 32 to indicate mouse motion.
         b += 32;
@@ -13368,7 +15638,7 @@ hterm.VT.prototype.decode = function(str) {
 /**
  * Encode a UTF-16 string as UTF-8.
  *
- * See also: http://en.wikipedia.org/wiki/UTF-16
+ * See also: https://en.wikipedia.org/wiki/UTF-16
  */
 hterm.VT.prototype.encodeUTF8 = function(str) {
   return lib.encodeUTF8(str);
@@ -13382,6 +15652,46 @@ hterm.VT.prototype.decodeUTF8 = function(str) {
 };
 
 /**
+ * Set the encoding of the terminal.
+ *
+ * @param {string} encoding The name of the encoding to set.
+ */
+hterm.VT.prototype.setEncoding = function(encoding) {
+  switch (encoding) {
+    default:
+      console.warn('Invalid value for "terminal-encoding": ' + encoding);
+      // Fall through.
+    case 'iso-2022':
+      this.codingSystemUtf8_ = false;
+      this.codingSystemLocked_ = false;
+      break;
+    case 'utf-8-locked':
+      this.codingSystemUtf8_ = true;
+      this.codingSystemLocked_ = true;
+      break;
+    case 'utf-8':
+      this.codingSystemUtf8_ = true;
+      this.codingSystemLocked_ = false;
+      break;
+  }
+
+  this.updateEncodingState_();
+};
+
+/**
+ * Refresh internal state when the encoding changes.
+ */
+hterm.VT.prototype.updateEncodingState_ = function() {
+  // If we're in UTF8 mode, don't suport 8-bit escape sequences as we'll never
+  // see those -- everything should be UTF8!
+  var cc1 = Object.keys(hterm.VT.CC1)
+      .filter((e) => !this.codingSystemUtf8_ || e.charCodeAt() < 0x80)
+      .map((e) => '\\x' + lib.f.zpad(e.charCodeAt().toString(16), 2))
+      .join('');
+  this.cc1Pattern_ = new RegExp(`[${cc1}]`);
+};
+
+/**
  * The default parse function.
  *
  * This will scan the string for the first 1-byte control character (C0/C1
@@ -13392,11 +15702,8 @@ hterm.VT.prototype.parseUnknown_ = function(parseState) {
   var self = this;
 
   function print(str) {
-    if (self[self.GL].GL)
+    if (!self.codingSystemUtf8_ && self[self.GL].GL)
       str = self[self.GL].GL(str);
-
-    if (self[self.GR].GR)
-      str = self[self.GR].GR(str);
 
     self.terminal.print(str);
   };
@@ -13440,7 +15747,7 @@ hterm.VT.prototype.parseCSI_ = function(parseState) {
     parseState.resetParseFunction();
 
   } else if (ch == ';') {
-    // Parameter delimeter.
+    // Parameter delimiter.
     if (this.trailingModifier_) {
       // Parameter delimiter after the trailing modifier.  That's a paddlin'.
       parseState.resetParseFunction();
@@ -13506,15 +15813,37 @@ hterm.VT.prototype.parseCSI_ = function(parseState) {
  */
 hterm.VT.prototype.parseUntilStringTerminator_ = function(parseState) {
   var buf = parseState.peekRemainingBuf();
-  var nextTerminator = buf.search(/(\x1b\\|\x07)/);
   var args = parseState.args;
+  // Since we might modify parse state buffer locally, if we want to advance
+  // the parse state buffer later on, we need to know how many chars we added.
+  let bufInserted = 0;
 
   if (!args.length) {
     args[0] = '';
     args[1] = new Date();
+  } else {
+    // If our saved buffer ends with an escape, it's because we were hoping
+    // it's an ST split across two buffers.  Move it from our saved buffer
+    // to the start of our current buffer for processing anew.
+    if (args[0].slice(-1) == '\x1b') {
+      args[0] = args[0].slice(0, -1);
+      buf = '\x1b' + buf;
+      bufInserted = 1;
+    }
   }
 
-  if (nextTerminator == -1) {
+  const nextTerminator = buf.search(/[\x1b\x07]/);
+  const terminator = buf[nextTerminator];
+  let foundTerminator;
+
+  // If the next escape we see is not a start of a ST, fall through.  This will
+  // either be invalid (embedded escape), or we'll queue it up (wait for \\).
+  if (terminator == '\x1b' && buf[nextTerminator + 1] != '\\')
+    foundTerminator = false;
+  else
+    foundTerminator = (nextTerminator != -1);
+
+  if (!foundTerminator) {
     // No terminator here, have to wait for the next string.
 
     args[0] += buf;
@@ -13524,20 +15853,24 @@ hterm.VT.prototype.parseUntilStringTerminator_ = function(parseState) {
     if (args[0].length > this.maxStringSequence)
       abortReason = 'too long: ' + args[0].length;
 
-    if (args[0].indexOf('\x1b') != -1)
-      abortReason = 'embedded escape: ' + args[0].indexOf('\x1b');
+    // Special case: If our buffering happens to split the ST (\e\\), we have to
+    // buffer the content temporarily.  So don't reject a trailing escape here,
+    // instead we let it timeout or be rejected in the next pass.
+    if (terminator == '\x1b' && nextTerminator != buf.length - 1)
+      abortReason = 'embedded escape: ' + nextTerminator;
 
     if (new Date() - args[1] > this.oscTimeLimit_)
-      abortReason = 'timeout expired: ' + new Date() - args[1];
+      abortReason = 'timeout expired: ' + (new Date() - args[1]);
 
     if (abortReason) {
-      console.log('parseUntilStringTerminator_: aborting: ' + abortReason,
-                  args[0]);
+      if (this.warnUnimplemented)
+        console.log('parseUntilStringTerminator_: aborting: ' + abortReason,
+                    args[0]);
       parseState.reset(args[0]);
       return false;
     }
 
-    parseState.advance(buf.length);
+    parseState.advance(buf.length - bufInserted);
     return true;
   }
 
@@ -13551,7 +15884,7 @@ hterm.VT.prototype.parseUntilStringTerminator_ = function(parseState) {
 
   parseState.resetParseFunction();
   parseState.advance(nextTerminator +
-                     (buf.substr(nextTerminator, 1) == '\x1b' ? 2 : 1));
+                     (terminator == '\x1b' ? 2 : 1) - bufInserted);
 
   return true;
 };
@@ -13595,18 +15928,12 @@ hterm.VT.prototype.dispatch = function(type, code, parseState) {
  *
  * Invoked in response to SM/RM.
  *
- * Expected values for code:
- *   2 - Keyboard Action Mode (AM).  Will not implement.
- *   4 - Insert Mode (IRM).
- *   12 - Send/receive (SRM).  Will not implement.
- *   20 - Automatic Newline (LNM).
- *
  * Unexpected and unimplemented values are silently ignored.
  */
 hterm.VT.prototype.setANSIMode = function(code, state) {
-  if (code == '4') {
+  if (code == 4) {  // Insert Mode (IRM)
     this.terminal.setInsertMode(state);
-  } else if (code == '20') {
+  } else if (code == 20) {  // Automatic Newline (LNM)
     this.terminal.setAutoCarriageReturn(state);
   } else if (this.warnUnimplemented) {
     console.warn('Unimplemented ANSI Mode: ' + code);
@@ -13617,76 +15944,14 @@ hterm.VT.prototype.setANSIMode = function(code, state) {
  * Set or reset one of the DEC Private modes.
  *
  * Invoked in response to DECSET/DECRST.
- *
- * Expected values for code:
- *      1 - Application Cursor Keys (DECCKM).
- *      2 - [!] Designate USASCII for character sets G0-G3 (DECANM), and set
- *          VT100 mode.
- *      3 - 132 Column Mode (DECCOLM).
- *      4 - [x] Smooth (Slow) Scroll (DECSCLM).
- *      5 - Reverse Video (DECSCNM).
- *      6 - Origin Mode (DECOM).
- *      7 - Wraparound Mode (DECAWM).
- *      8 - [x] Auto-repeat Keys (DECARM).
- *      9 - [!] Send Mouse X & Y on button press.
- *     10 - [x] Show toolbar (rxvt).
- *     12 - Start Blinking Cursor (att610).
- *     18 - [!] Print form feed (DECPFF).
- *     19 - [x] Set print extent to full screen (DECPEX).
- *     25 - Show Cursor (DECTCEM).
- *     30 - [!] Show scrollbar (rxvt).
- *     35 - [x] Enable font-shifting functions (rxvt).
- *     38 - [x] Enter Tektronix Mode (DECTEK).
- *     40 - Allow 80 - 132 Mode.
- *     41 - [!] more(1) fix (see curses resource).
- *     42 - [!] Enable Nation Replacement Character sets (DECNRCM).
- *     44 - [!] Turn On Margin Bell.
- *     45 - Reverse-wraparound Mode.
- *     46 - [x] Start Logging.
- *     47 - [!] Use Alternate Screen Buffer.
- *     66 - [!] Application keypad (DECNKM).
- *     67 - Backarrow key sends backspace (DECBKM).
- *   1000 - Send Mouse X & Y on button press and release.  (MOUSE_REPORT_CLICK)
- *   1001 - [!] Use Hilite Mouse Tracking.
- *   1002 - Use Cell Motion Mouse Tracking.  (MOUSE_REPORT_DRAG)
- *   1003 - [!] Use All Motion Mouse Tracking.
- *   1004 - [!] Send FocusIn/FocusOut events.
- *   1005 - [!] Enable Extended Mouse Mode.
- *   1010 - Scroll to bottom on tty output (rxvt).
- *   1011 - Scroll to bottom on key press (rxvt).
- *   1034 - [x] Interpret "meta" key, sets eighth bit.
- *   1035 - [x] Enable special modifiers for Alt and NumLock keys.
- *   1036 - Send ESC when Meta modifies a key.
- *   1037 - [!] Send DEL from the editing-keypad Delete key.
- *   1039 - Send ESC when Alt modifies a key.
- *   1040 - [x] Keep selection even if not highlighted.
- *   1041 - [x] Use the CLIPBOARD selection.
- *   1042 - [!] Enable Urgency window manager hint when Control-G is received.
- *   1043 - [!] Enable raising of the window when Control-G is received.
- *   1047 - [!] Use Alternate Screen Buffer.
- *   1048 - Save cursor as in DECSC.
- *   1049 - Save cursor as in DECSC and use Alternate Screen Buffer, clearing
- *          it first. (This may be disabled by the titeInhibit resource). This
- *          combines the effects of the 1047 and 1048 modes. Use this with
- *          terminfo-based applications rather than the 47 mode.
- *   1050 - [!] Set terminfo/termcap function-key mode.
- *   1051 - [x] Set Sun function-key mode.
- *   1052 - [x] Set HP function-key mode.
- *   1053 - [x] Set SCO function-key mode.
- *   1060 - [x] Set legacy keyboard emulation (X11R6).
- *   1061 - [!] Set VT220 keyboard emulation.
- *   2004 - Set bracketed paste mode.
- *
- * [!] - Not currently implemented, may be in the future.
- * [x] - Will not implement.
  */
 hterm.VT.prototype.setDECMode = function(code, state) {
-  switch (code) {
-    case '1':  // DECCKM
+  switch (parseInt(code, 10)) {
+    case 1:  // DECCKM
       this.terminal.keyboard.applicationCursor = state;
       break;
 
-    case '3':  // DECCOLM
+    case 3:  // DECCOLM
       if (this.allowColumnWidthChanges_) {
         this.terminal.setWidth(state ? 132 : 80);
 
@@ -13695,74 +15960,94 @@ hterm.VT.prototype.setDECMode = function(code, state) {
       }
       break;
 
-    case '5':  // DECSCNM
+    case 5:  // DECSCNM
       this.terminal.setReverseVideo(state);
       break;
 
-    case '6':  // DECOM
+    case 6:  // DECOM
       this.terminal.setOriginMode(state);
       break;
 
-    case '7':  // DECAWM
+    case 7:  // DECAWM
       this.terminal.setWraparound(state);
       break;
 
-    case '12':  // att610
+    case 12:  // Start blinking cursor
       if (this.enableDec12)
         this.terminal.setCursorBlink(state);
       break;
 
-    case '25':  // DECTCEM
+    case 25:  // DECTCEM
       this.terminal.setCursorVisible(state);
       break;
 
-    case '40':  // no-spec
+    case 30:  // Show scrollbar
+      this.terminal.setScrollbarVisible(state);
+      break;
+
+    case 40:  // Allow 80 - 132 (DECCOLM) Mode
       this.terminal.allowColumnWidthChanges_ = state;
       break;
 
-    case '45':  // no-spec
+    case 45:  // Reverse-wraparound Mode
       this.terminal.setReverseWraparound(state);
       break;
 
-    case '67':  // DECBKM
+    case 67:  // Backarrow key sends backspace (DECBKM)
       this.terminal.keyboard.backspaceSendsBackspace = state;
       break;
 
-    case '1000':  // Report on mouse clicks only.
+    case 1000:  // Report on mouse clicks only.
       this.mouseReport = (
           state ? this.MOUSE_REPORT_CLICK : this.MOUSE_REPORT_DISABLED);
+      this.terminal.syncMouseStyle();
       break;
 
-    case '1002':  // Report on mouse clicks and drags
+    case 1002:  // Report on mouse clicks and drags
       this.mouseReport = (
           state ? this.MOUSE_REPORT_DRAG : this.MOUSE_REPORT_DISABLED);
+      this.terminal.syncMouseStyle();
       break;
 
-    case '1010':  // rxvt
+    case 1004:  // Report on window focus change.
+      this.terminal.reportFocus = state;
+      break;
+
+    case 1010:  // Scroll to bottom on tty output
       this.terminal.scrollOnOutput = state;
       break;
 
-    case '1011':  // rxvt
+    case 1011:  // Scroll to bottom on key press
       this.terminal.scrollOnKeystroke = state;
       break;
 
-    case '1036':  // no-spec
+    case 1036:  // Send ESC when Meta modifies a key
       this.terminal.keyboard.metaSendsEscape = state;
       break;
 
-    case '1039':  // no-spec
-      this.terminal.keyboard.altSendsEscape = state;
+    case 1039:  // Send ESC when Alt modifies a key
+      if (state) {
+        if (!this.terminal.keyboard.previousAltSendsWhat_) {
+          this.terminal.keyboard.previousAltSendsWhat_ =
+              this.terminal.keyboard.altSendsWhat;
+          this.terminal.keyboard.altSendsWhat = 'escape';
+        }
+      } else if (this.terminal.keyboard.previousAltSendsWhat_) {
+        this.terminal.keyboard.altSendsWhat =
+            this.terminal.keyboard.previousAltSendsWhat_;
+        this.terminal.keyboard.previousAltSendsWhat_ = null;
+      }
       break;
 
-    case '47':
-    case '1047':  // no-spec
+    case 47:  // Use Alternate Screen Buffer
+    case 1047:
       this.terminal.setAlternateMode(state);
       break;
 
-    case '1048':  // Save cursor as in DECSC.
+    case 1048:  // Save cursor as in DECSC.
       this.savedState_.save();
 
-    case '1049':  // 1047 + 1048 + clear.
+    case 1049:  // 1047 + 1048 + clear.
       if (state) {
         this.savedState_.save();
         this.terminal.setAlternateMode(state);
@@ -13774,7 +16059,7 @@ hterm.VT.prototype.setDECMode = function(code, state) {
 
       break;
 
-    case '2004':  // Bracketed paste mode.
+    case 2004:  // Bracketed paste mode.
       this.terminal.setBracketedPaste(state);
       break;
 
@@ -13836,7 +16121,7 @@ hterm.VT.VT52 = {};
  *
  * Silently ignored.
  */
-hterm.VT.CC1['\x00'] = function () {};
+hterm.VT.CC1['\x00'] = hterm.VT.ignore;
 
 /**
  * Enquiry (ENQ).
@@ -13897,9 +16182,7 @@ hterm.VT.CC1['\x0b'] = hterm.VT.CC1['\x0a'];
  *
  * Interpreted as LF.
  */
-hterm.VT.CC1['\x0c'] = function() {
-  this.terminal.formFeed();
-};
+hterm.VT.CC1['\x0c'] = hterm.VT.CC1['\x0a'];
 
 /**
  * Carriage Return (CR).
@@ -13955,6 +16238,11 @@ hterm.VT.CC1['\x13'] = hterm.VT.ignore;
  * It also causes the error character to be displayed.
  */
 hterm.VT.CC1['\x18'] = function(parseState) {
+  // If we've shifted in the G1 character set, shift it back out to
+  // the default character set.
+  if (this.GL == 'G1') {
+    this.GL = 'G0';
+  }
   parseState.resetParseFunction();
   this.terminal.print('?');
 };
@@ -14066,7 +16354,7 @@ hterm.VT.ESC['P'] = function(parseState) {
 };
 
 /**
- * Start of Protected Area (SPA).
+ * Start of Guarded Area (SPA).
  *
  * Will not implement.
  */
@@ -14074,7 +16362,7 @@ hterm.VT.CC1['\x96'] =
 hterm.VT.ESC['V'] = hterm.VT.ignore;
 
 /**
- * End of Protected Area (EPA).
+ * End of Guarded Area (EPA).
  *
  * Will not implement.
  */
@@ -14202,21 +16490,11 @@ hterm.VT.ESC['\x20'] = function(parseState) {
 
 /**
  * DEC 'ESC #' sequences.
- *
- * Handled:
- *   ESC # 8 - DEC Screen Alignment Test (DECALN).
- *             Fills the terminal with 'E's.  Used liberally by vttest.
- *
- * Ignored:
- *   ESC # 3 - DEC double-height line, top half (DECDHL).
- *   ESC # 4 - DEC double-height line, bottom half (DECDHL).
- *   ESC # 5 - DEC single-width line (DECSWL).
- *   ESC # 6 - DEC double-width line (DECDWL).
  */
 hterm.VT.ESC['#'] = function(parseState) {
   parseState.func = function(parseState) {
     var ch = parseState.consumeChar();
-    if (ch == '8')
+    if (ch == '8')  // DEC Screen Alignment Test (DECALN)
       this.terminal.fill('E');
 
     parseState.resetParseFunction();
@@ -14224,21 +16502,56 @@ hterm.VT.ESC['#'] = function(parseState) {
 };
 
 /**
- * 'ESC %' sequences, character set control.  Not currently implemented.
- *
- * To be implemented (currently ignored):
- *   ESC % @ - Set ISO 8859-1 character set.
- *   ESC % G - Set UTF-8 character set.
- *
- * All other ESC # sequences are echoed to the terminal.
- *
- * TODO(rginda): Implement.
+ * Designate Other Coding System (DOCS).
  */
 hterm.VT.ESC['%'] = function(parseState) {
   parseState.func = function(parseState) {
     var ch = parseState.consumeChar();
-    if (ch != '@' && ch != 'G' && this.warnUnimplemented)
-      console.warn('Unknown ESC % argument: ' + JSON.stringify(ch));
+
+    // If we've locked the encoding, then just eat the bytes and return.
+    if (this.codingSystemLocked_) {
+      if (ch == '/')
+        parseState.consumeChar();
+      parseState.resetParseFunction();
+      return;
+    }
+
+    // Process the encoding requests.
+    switch (ch) {
+      case '@':
+        // Switch to ECMA 35.
+        this.setEncoding('iso-2022');
+        break;
+
+      case 'G':
+        // Switch to UTF-8.
+        this.setEncoding('utf-8');
+        break;
+
+      case '/':
+        // One way transition to something else.
+        ch = parseState.consumeChar();
+        switch (ch) {
+          case 'G':  // UTF-8 Level 1.
+          case 'H':  // UTF-8 Level 2.
+          case 'I':  // UTF-8 Level 3.
+            // We treat all UTF-8 levels the same.
+            this.setEncoding('utf-8-locked');
+            break;
+
+          default:
+            if (this.warnUnimplemented)
+              console.warn('Unknown ESC % / argument: ' + JSON.stringify(ch));
+            break;
+        }
+        break;
+
+      default:
+        if (this.warnUnimplemented)
+          console.warn('Unknown ESC % argument: ' + JSON.stringify(ch));
+        break;
+    }
+
     parseState.resetParseFunction();
   };
 };
@@ -14254,24 +16567,7 @@ hterm.VT.ESC['%'] = function(parseState) {
  *   ESC . Ps - Set G2 character set (VT300).
  *   ESC / Ps - Set G3 character set (VT300).
  *
- * Values for Ps are:
- *   0 - DEC Special Character and Line Drawing Set.
- *   A - United Kingdom (UK).
- *   B - United States (USASCII).
- *   4 - Dutch.
- *   C or 5 - Finnish.
- *   R - French.
- *   Q - French Canadian.
- *   K - German.
- *   Y - Italian.
- *   E or 6 - Norwegian/Danish.
- *   Z - Spanish.
- *   H or 7 - Swedish.
- *   = - Swiss.
- *
  * All other sequences are echoed to the terminal.
- *
- * TODO(rginda): Implement.
  */
 hterm.VT.ESC['('] =
 hterm.VT.ESC[')'] =
@@ -14288,15 +16584,16 @@ hterm.VT.ESC['/'] = function(parseState, code) {
       return;
     }
 
-    if (ch in hterm.VT.CharacterMap.maps) {
+    var map = this.characterMaps.getMap(ch);
+    if (map !== undefined) {
       if (code == '(') {
-        this.G0 = hterm.VT.CharacterMap.maps[ch];
+        this.G0 = map;
       } else if (code == ')' || code == '-') {
-        this.G1 = hterm.VT.CharacterMap.maps[ch];
+        this.G1 = map;
       } else if (code == '*' || code == '.') {
-        this.G2 = hterm.VT.CharacterMap.maps[ch];
+        this.G2 = map;
       } else if (code == '+' || code == '/') {
-        this.G3 = hterm.VT.CharacterMap.maps[ch];
+        this.G3 = map;
       }
     } else if (this.warnUnimplemented) {
       console.log('Invalid character set for "' + code + '": ' + ch);
@@ -14321,7 +16618,7 @@ hterm.VT.ESC['7'] = function() {
 };
 
 /**
- * Restore Cursor (DECSC).
+ * Restore Cursor (DECRC).
  */
 hterm.VT.ESC['8'] = function() {
   this.savedState_.restore();
@@ -14335,14 +16632,14 @@ hterm.VT.ESC['8'] = function() {
 hterm.VT.ESC['9'] = hterm.VT.ignore;
 
 /**
- * Application keypad (DECPAM).
+ * Application keypad (DECKPAM).
  */
 hterm.VT.ESC['='] = function() {
   this.terminal.keyboard.applicationKeypad = true;
 };
 
 /**
- * Normal keypad (DECPNM).
+ * Normal keypad (DECKPNM).
  */
 hterm.VT.ESC['>'] = function() {
   this.terminal.keyboard.applicationKeypad = false;
@@ -14471,6 +16768,79 @@ hterm.VT.OSC['4'] = function(parseState) {
 };
 
 /**
+ * iTerm2 growl notifications.
+ */
+hterm.VT.OSC['9'] = function(parseState) {
+  // This just dumps the entire string as the message.
+  hterm.notify({'body': parseState.args[0]});
+};
+
+/**
+ * Change VT100 text foreground color.
+ */
+hterm.VT.OSC['10'] = function(parseState) {
+  // Args come in as a single string, but extra args will chain to the following
+  // OSC sequences.
+  var args = parseState.args[0].split(';');
+  if (!args)
+    return;
+
+  var colorArg;
+  var colorX11 = lib.colors.x11ToCSS(args.shift());
+  if (colorX11)
+    this.terminal.setForegroundColor(colorX11);
+
+  if (args.length > 0) {
+    parseState.args[0] = args.join(';');
+    hterm.VT.OSC['11'].apply(this, [parseState]);
+  }
+};
+
+/**
+ * Change VT100 text background color.
+ */
+hterm.VT.OSC['11'] = function(parseState) {
+  // Args come in as a single string, but extra args will chain to the following
+  // OSC sequences.
+  var args = parseState.args[0].split(';');
+  if (!args)
+    return;
+
+  var colorArg;
+  var colorX11 = lib.colors.x11ToCSS(args.shift());
+  if (colorX11)
+    this.terminal.setBackgroundColor(colorX11);
+
+  if (args.length > 0) {
+    parseState.args[0] = args.join(';');
+    hterm.VT.OSC['12'].apply(this, [parseState]);
+  }
+};
+
+/**
+ * Change text cursor color.
+ */
+hterm.VT.OSC['12'] = function(parseState) {
+  // Args come in as a single string, but extra args will chain to the following
+  // OSC sequences.
+  var args = parseState.args[0].split(';');
+  if (!args)
+    return;
+
+  var colorArg;
+  var colorX11 = lib.colors.x11ToCSS(args.shift());
+  if (colorX11)
+    this.terminal.setCursorColor(colorX11);
+
+  /* Note: If we support OSC 13+, we'd chain it here.
+  if (args.length > 0) {
+    parseState.args[0] = args.join(';');
+    hterm.VT.OSC['13'].apply(this, [parseState]);
+  }
+  */
+};
+
+/**
  * Set the cursor shape.
  *
  * Parameter is expected to be in the form "CursorShape=number", where number is
@@ -14493,15 +16863,15 @@ hterm.VT.OSC['50'] = function(parseState) {
   }
 
   switch (args[1]) {
-    case '1':
+    case '1':  // CursorShape=1: I-Beam.
       this.terminal.setCursorShape(hterm.Terminal.cursorShape.BEAM);
       break;
 
-    case '2':
+    case '2':  // CursorShape=2: Underline.
       this.terminal.setCursorShape(hterm.Terminal.cursorShape.UNDERLINE);
       break;
 
-    default:
+    default:  // CursorShape=0: Block.
       this.terminal.setCursorShape(hterm.Terminal.cursorShape.BLOCK);
   }
 };
@@ -14517,6 +16887,9 @@ hterm.VT.OSC['50'] = function(parseState) {
  * preference.
  */
 hterm.VT.OSC['52'] = function(parseState) {
+  if (!this.enableClipboardWrite)
+    return;
+
   // Args come in as a single 'clipboard;b64-data' string.  The clipboard
   // parameter is used to select which of the X clipboards to address.  Since
   // we're not integrating with X, we treat them all the same.
@@ -14527,6 +16900,39 @@ hterm.VT.OSC['52'] = function(parseState) {
   var data = window.atob(args[1]);
   if (data)
     this.terminal.copyStringToClipboard(this.decode(data));
+};
+
+/**
+ * URxvt perl modules.
+ *
+ * This is the escape system used by rxvt-unicode and its perl modules.
+ * Obviously we don't support perl or custom modules, so we list a few common
+ * ones that we find useful.
+ *
+ * Technically there is no format here, but most modules obey:
+ * <module name>;<module args, usually ; delimited>
+ */
+hterm.VT.OSC['777'] = function(parseState) {
+  var ary;
+  var urxvtMod = parseState.args[0].split(';', 1)[0];
+
+  switch (urxvtMod) {
+    case 'notify':
+      // Format:
+      // notify;title;message
+      var title, message;
+      ary = parseState.args[0].match(/^[^;]+;([^;]*)(;([\s\S]*))?$/);
+      if (ary) {
+        title = ary[1];
+        message = ary[3];
+      }
+      hterm.notify({'title': title, 'body': message});
+      break;
+
+    default:
+      console.warn('Unknown urxvt module: ' + parseState.args[0]);
+      break;
+  }
 };
 
 /**
@@ -14619,13 +17025,13 @@ hterm.VT.CSI['J'] =
 hterm.VT.CSI['?J'] = function(parseState, code) {
   var arg = parseState.args[0];
 
-  if (!arg || arg == '0') {
-      this.terminal.eraseBelow();
-  } else if (arg == '1') {
+  if (!arg || arg == 0) {
+    this.terminal.eraseBelow();
+  } else if (arg == 1) {
     this.terminal.eraseAbove();
-  } else if (arg == '2') {
+  } else if (arg == 2) {
     this.terminal.clear();
-  } else if (arg == '3') {
+  } else if (arg == 3) {
     // The xterm docs say this means "Erase saved lines", but we'll just clear
     // the display since killing the scrollback seems rude.
     this.terminal.clear();
@@ -14639,11 +17045,11 @@ hterm.VT.CSI['K'] =
 hterm.VT.CSI['?K'] = function(parseState, code) {
   var arg = parseState.args[0];
 
-  if (!arg || arg == '0') {
+  if (!arg || arg == 0) {
     this.terminal.eraseToRight();
-  } else if (arg == '1'){
+  } else if (arg == 1) {
     this.terminal.eraseToLeft();
-  } else if (arg == '2') {
+  } else if (arg == 2) {
     this.terminal.eraseLine();
   }
 };
@@ -14726,9 +17132,17 @@ hterm.VT.CSI['Z'] = function(parseState) {
 
 /**
  * Character Position Absolute (HPA).
+ *
+ * Same as Cursor Character Absolute (CHA).
  */
-hterm.VT.CSI['`'] = function(parseState) {
-  this.terminal.setCursorColumn(parseState.iarg(0, 1) - 1);
+hterm.VT.CSI['`'] = hterm.VT.CSI['G'];
+
+/**
+ * Character Position Relative (HPR).
+ */
+hterm.VT.CSI['a'] = function(parseState) {
+  this.terminal.setCursorColumn(this.terminal.getCursorColumn() +
+                                parseState.iarg(0, 1));
 };
 
 /**
@@ -14746,7 +17160,7 @@ hterm.VT.CSI['b'] = hterm.VT.ignore;
  * we fill out the 'Not currently implemented' parts.
  */
 hterm.VT.CSI['c'] = function(parseState) {
-  if (!parseState.args[0] || parseState.args[0] == '0') {
+  if (!parseState.args[0] || parseState.args[0] == 0) {
     this.terminal.io.sendString('\x1b[?1;2c');
   }
 };
@@ -14780,10 +17194,10 @@ hterm.VT.CSI['f'] = hterm.VT.CSI['H'];
  * Tab Clear (TBC).
  */
 hterm.VT.CSI['g'] = function(parseState) {
-  if (!parseState.args[0] || parseState.args[0] == '0') {
+  if (!parseState.args[0] || parseState.args[0] == 0) {
     // Clear tab stop at cursor.
     this.terminal.clearTabStopAtCursor(false);
-  } else if (parseState.args[0] == '3') {
+  } else if (parseState.args[0] == 3) {
     // Clear all tab stops.
     this.terminal.clearAllTabStops();
   }
@@ -14837,87 +17251,19 @@ hterm.VT.CSI['?l'] = function(parseState) {
 /**
  * Character Attributes (SGR).
  *
- * Iterate through the list of arguments, applying the following attribute
- * changes based on the argument value...
- *
- *    0 Normal (default).
- *    1 Bold.
- *    3 Italic (non-xterm).
- *    4 Underlined.
- *    5 Blink (appears as Bold).
- *    7 Inverse.
- *    8 Invisible, i.e., hidden (VT300).
- *   22 Normal (neither bold nor faint).
- *   23 Not italic (non-xterm).
- *   24 Not underlined.
- *   25 Steady (not blinking).
- *   27 Positive (not inverse).
- *   28 Visible, i.e., not hidden (VT300).
- *   30 Set foreground color to Black.
- *   31 Set foreground color to Red.
- *   32 Set foreground color to Green.
- *   33 Set foreground color to Yellow.
- *   34 Set foreground color to Blue.
- *   35 Set foreground color to Magenta.
- *   36 Set foreground color to Cyan.
- *   37 Set foreground color to White.
- *   39 Set foreground color to default (original).
- *   40 Set background color to Black.
- *   41 Set background color to Red.
- *   42 Set background color to Green.
- *   43 Set background color to Yellow.
- *   44 Set background color to Blue.
- *   45 Set background color to Magenta.
- *   46 Set background color to Cyan.
- *   47 Set background color to White.
- *   49 Set background color to default (original)
- *
- * Non-xterm (italic) codes have mixed support, but are supported by both
- * gnome-terminal and rxvt and are recognized as CSI codes on Wikipedia
- * (http://en.wikipedia.org/wiki/ANSI_escape_code).
- *
- * For 16-color support, the following apply.
- *
- *   90 Set foreground color to Bright Black.
- *   91 Set foreground color to Bright Red.
- *   92 Set foreground color to Bright Green.
- *   93 Set foreground color to Bright Yellow.
- *   94 Set foreground color to Bright Blue.
- *   95 Set foreground color to Bright Magenta.
- *   96 Set foreground color to Bright Cyan.
- *   97 Set foreground color to Bright White.
- *  100 Set background color to Bright Black.
- *  101 Set background color to Bright Red.
- *  102 Set background color to Bright Green.
- *  103 Set background color to Bright Yellow.
- *  104 Set background color to Bright Blue.
- *  105 Set background color to Bright Magenta.
- *  106 Set background color to Bright Cyan.
- *  107 Set background color to Bright White.
- *
- * For 88- or 256-color support, the following apply.
- *  38 ; 5 ; P Set foreground color to P.
- *  48 ; 5 ; P Set background color to P.
- *
- *  For true color (24-bit) support, the following apply.
- *  38 ; 2 ; R ; G ; B Set foreground color to rgb(R, G, B)
- *  48 ; 2 ; R ; G ; B Set background color to rgb(R, G, B)
- *
- * Note that most terminals consider "bold" to be "bold and bright".  In
- * some documents the bold state is even referred to as bright.  We interpret
- * bold as bold-bright here too, but only when the "bold" setting comes before
- * the color selection.
+ * Iterate through the list of arguments, applying the attribute changes based
+ * on the argument value...
  */
 hterm.VT.CSI['m'] = function(parseState) {
   function get256(i) {
-    if (parseState.args.length < i + 2 || parseState.args[i + 1] != '5')
+    if (parseState.args.length < i + 2 || parseState.args[i + 1] != 5)
       return null;
 
     return parseState.iarg(i + 2, 0);
   }
 
   function getTrueColor(i) {
-    if (parseState.args.length < i + 5 || parseState.args[i + 1] != '2')
+    if (parseState.args.length < i + 5 || parseState.args[i + 1] != 2)
       return null;
     var r = parseState.iarg(i + 2, 0);
     var g = parseState.iarg(i + 3, 0);
@@ -14937,32 +17283,39 @@ hterm.VT.CSI['m'] = function(parseState) {
     var arg = parseState.iarg(i, 0);
 
     if (arg < 30) {
-      if (arg == 0) {
+      if (arg == 0) {  // Normal (default).
         attrs.reset();
-      } else if (arg == 1) {
+      } else if (arg == 1) {  // Bold.
         attrs.bold = true;
-      } else if (arg == 3) {
+      } else if (arg == 2) {  // Faint.
+        attrs.faint = true;
+      } else if (arg == 3) {  // Italic.
         attrs.italic = true;
-      } else if (arg == 4) {
+      } else if (arg == 4) {  // Underline.
         attrs.underline = true;
-      } else if (arg == 5) {
+      } else if (arg == 5) {  // Blink.
         attrs.blink = true;
       } else if (arg == 7) {  // Inverse.
         attrs.inverse = true;
       } else if (arg == 8) {  // Invisible.
         attrs.invisible = true;
-      } else if (arg == 22) {
+      } else if (arg == 9) {  // Crossed out.
+        attrs.strikethrough = true;
+      } else if (arg == 22) {  // Not bold & not faint.
         attrs.bold = false;
-      } else if (arg == 23) {
+        attrs.faint = false;
+      } else if (arg == 23) {  // Not italic.
         attrs.italic = false;
-      } else if (arg == 24) {
+      } else if (arg == 24) {  // Not underlined.
         attrs.underline = false;
-      } else if (arg == 25) {
+      } else if (arg == 25) {  // Not blink.
         attrs.blink = false;
-      } else if (arg == 27) {
+      } else if (arg == 27) {  // Steady.
         attrs.inverse = false;
-      } else if (arg == 28) {
+      } else if (arg == 28) {  // Visible.
         attrs.invisible = false;
+      } else if (arg == 29) {  // Not crossed out.
+        attrs.strikethrough = false;
       }
 
     } else if (arg < 50) {
@@ -15051,9 +17404,9 @@ hterm.VT.CSI['>m'] = hterm.VT.ignore;
  * 6 - Report Cursor Position (CPR) [row;column]. Result is CSI r ; c R
  */
 hterm.VT.CSI['n'] = function(parseState) {
-  if (parseState.args[0] == '5') {
+  if (parseState.args[0] == 5) {
     this.terminal.io.sendString('\x1b0n');
-  } else if (parseState.args[0] == '6') {
+  } else if (parseState.args[0] == 6) {
     var row = this.terminal.getCursorRow() + 1;
     var col = this.terminal.getCursorColumn() + 1;
     this.terminal.io.sendString('\x1b[' + row + ';' + col + 'R');
@@ -15081,17 +17434,17 @@ hterm.VT.CSI['>n'] = hterm.VT.ignore;
  *      or CSI ? 5 0 n No Locator, if not.
  */
 hterm.VT.CSI['?n'] = function(parseState) {
-  if (parseState.args[0] == '6') {
+  if (parseState.args[0] == 6) {
     var row = this.terminal.getCursorRow() + 1;
     var col = this.terminal.getCursorColumn() + 1;
     this.terminal.io.sendString('\x1b[' + row + ';' + col + 'R');
-  } else if (parseState.args[0] == '15') {
+  } else if (parseState.args[0] == 15) {
     this.terminal.io.sendString('\x1b[?11n');
-  } else if (parseState.args[0] == '25') {
+  } else if (parseState.args[0] == 25) {
     this.terminal.io.sendString('\x1b[?21n');
-  } else if (parseState.args[0] == '26') {
+  } else if (parseState.args[0] == 26) {
     this.terminal.io.sendString('\x1b[?12;1;0;0n');
-  } else if (parseState.args[0] == '53') {
+  } else if (parseState.args[0] == 53) {
     this.terminal.io.sendString('\x1b[?50n');
   }
 };
@@ -15144,27 +17497,27 @@ hterm.VT.CSI['q'] = hterm.VT.ignore;
 
 /**
  * Set cursor style (DECSCUSR, VT520).
- *
- *   0 - Blinking block.
- *   1 - Blinking block (default).
- *   2 - Steady block.
- *   3 - Blinking underline.
- *   4 - Steady underline.
  */
 hterm.VT.CSI[' q'] = function(parseState) {
   var arg = parseState.args[0];
 
-  if (arg == '0' || arg == '1') {
+  if (arg == 0 || arg == 1) {
     this.terminal.setCursorShape(hterm.Terminal.cursorShape.BLOCK);
     this.terminal.setCursorBlink(true);
-  } else if (arg == '2') {
+  } else if (arg == 2) {
     this.terminal.setCursorShape(hterm.Terminal.cursorShape.BLOCK);
     this.terminal.setCursorBlink(false);
-  } else if (arg == '3') {
+  } else if (arg == 3) {
     this.terminal.setCursorShape(hterm.Terminal.cursorShape.UNDERLINE);
     this.terminal.setCursorBlink(true);
-  } else if (arg == '4') {
+  } else if (arg == 4) {
     this.terminal.setCursorShape(hterm.Terminal.cursorShape.UNDERLINE);
+    this.terminal.setCursorBlink(false);
+  } else if (arg == 5) {
+    this.terminal.setCursorShape(hterm.Terminal.cursorShape.BEAM);
+    this.terminal.setCursorBlink(true);
+  } else if (arg == 6) {
+    this.terminal.setCursorShape(hterm.Terminal.cursorShape.BEAM);
     this.terminal.setCursorBlink(false);
   } else {
     console.warn('Unknown cursor style: ' + arg);
@@ -15296,7 +17649,7 @@ hterm.VT.CSI['$x'] = hterm.VT.ignore;
 
 /**
  * vt_tiledata (as used by NAOhack and UnNetHack)
- * (see http://nethackwiki.com/wiki/Vt_tiledata for more info)
+ * (see https://nethackwiki.com/wiki/Vt_tiledata for more info)
  *
  * Implemented as far as we care (start a glyph and end a glyph).
  */
@@ -15304,12 +17657,12 @@ hterm.VT.CSI['z'] = function(parseState) {
   if (parseState.args.length < 1)
     return;
   var arg = parseState.args[0];
-  if (arg == '0') {
+  if (arg == 0) {
     // Start a glyph (one parameter, the glyph number).
     if (parseState.args.length < 2)
       return;
     this.terminal.getTextAttributes().tileData = parseState.args[1];
-  } else if (arg == '1') {
+  } else if (arg == 1) {
     // End a glyph.
     this.terminal.getTextAttributes().tileData = null;
   }
@@ -15348,14 +17701,14 @@ hterm.VT.CSI['\'|'] = hterm.VT.ignore;
  *
  * Will not implement.
  */
-hterm.VT.CSI[' }'] = hterm.VT.ignore;
+hterm.VT.CSI['\'}'] = hterm.VT.ignore;
 
 /**
  * Delete P s Columns (DECDC), VT420 and up.
  *
  * Will not implement.
  */
-hterm.VT.CSI[' ~'] = hterm.VT.ignore;
+hterm.VT.CSI['\'~'] = hterm.VT.ignore;
 // SOURCE FILE: hterm/js/hterm_vt_character_map.js
 // Copyright (c) 2012 The Chromium OS Authors. All rights reserved.
 // Use of this source code is governed by a BSD-style license that can be
@@ -15368,80 +17721,175 @@ lib.rtdep('lib.f');
 /**
  * Character map object.
  *
- * @param {object} The GL mapping from input characters to output characters.
- *     The GR mapping will be automatically created.
+ * Mapping from received to display character, used depending on the active
+ * VT character set.
+ *
+ * GR maps are not currently supported.
+ *
+ * @param {string} description A human readable description of this map.
+ * @param {Object} glmap The GL mapping from input to output characters.
  */
-hterm.VT.CharacterMap = function(name, glmap) {
+hterm.VT.CharacterMap = function(description, glmap) {
   /**
-   * Short name for this character set, useful for debugging.
+   * Short description for this character set, useful for debugging.
    */
-  this.name = name;
+  this.description = description;
 
   /**
    * The function to call to when this map is installed in GL.
    */
   this.GL = null;
 
-  /**
-   * The function to call to when this map is installed in GR.
-   */
-  this.GR = null;
+  // Always keep an unmodified reference to the map.
+  // This allows us to sanely reset back to the original state.
+  this.glmapBase_ = glmap;
 
-  if (glmap)
-    this.reset(glmap);
+  // Now sync the internal state as needed.
+  this.sync_();
 };
 
 /**
- * @param {object} The GL mapping from input characters to output characters.
- *     The GR mapping will be automatically created.
+ * Internal helper for resyncing internal state.
+ *
+ * Used when the mappings change.
+ *
+ * @param {Object?} opt_glmap Additional mappings to overlay on top of the
+ *     base mapping.
  */
-hterm.VT.CharacterMap.prototype.reset = function(glmap) {
-  // Set the the GL mapping.
-  this.glmap = glmap;
+hterm.VT.CharacterMap.prototype.sync_ = function(opt_glmap) {
+  // If there are no maps, then reset the state back.
+  if (!this.glmapBase_ && !opt_glmap) {
+    this.GL = null;
+    delete this.glmap_;
+    delete this.glre_;
+    return;
+  }
 
-  var glkeys = Object.keys(this.glmap).map(function(key) {
-      return '\\x' + lib.f.zpad(key.charCodeAt(0).toString(16));
-    });
+  // Set the the GL mapping.  If we're given a custom mapping, then create a
+  // new object to hold the merged map.  This way we can cleanly reset back.
+  if (opt_glmap)
+    this.glmap_ = Object.assign({}, this.glmapBase_, opt_glmap);
+  else
+    this.glmap_ = this.glmapBase_;
 
-  this.glre = new RegExp('[' + glkeys.join('') + ']', 'g');
+  var glchars = Object.keys(this.glmap_).map((key) =>
+      '\\x' + lib.f.zpad(key.charCodeAt(0).toString(16)));
+  this.glre_ = new RegExp('[' + glchars.join('') + ']', 'g');
 
-  // Compute the GR mapping.
-  // This is the same as GL except all keys have their MSB set.
-  this.grmap = {};
-
-  glkeys.forEach(function(glkey) {
-      var grkey = String.fromCharCode(glkey.charCodeAt(0) & 0x80);
-      this.grmap[grkey] = this.glmap[glkey];
-    }.bind(this));
-
-  var grkeys = Object.keys(this.grmap).map(function(key) {
-      return '\\x' + lib.f.zpad(key.charCodeAt(0).toString(16), 2);
-    });
-
-  this.grre = new RegExp('[' + grkeys.join('') + ']', 'g');
-
-  this.GL = function(str) {
-    return str.replace(this.glre,
-                       function(ch) { return this.glmap[ch] }.bind(this));
-  }.bind(this);
-
-  this.GR = function(str) {
-    return str.replace(this.grre,
-                       function(ch) { return this.grmap[ch] }.bind(this));
-  }.bind(this);
+  this.GL = (str) => str.replace(this.glre_, (ch) => this.glmap_[ch]);
 };
 
 /**
- * Mapping from received to display character, used depending on the active
- * VT character set.
+ * Reset map back to original mappings (discarding runtime updates).
+ *
+ * Specifically, any calls to setOverrides will be discarded.
  */
-hterm.VT.CharacterMap.maps = {};
+hterm.VT.CharacterMap.prototype.reset = function() {
+  // If we haven't been given a custom mapping, then there's nothing to reset.
+  if (this.glmap_ !== this.glmapBase_)
+    this.sync_();
+};
+
+/**
+ * Merge custom changes to this map.
+ *
+ * The input map need not duplicate the existing mappings as it is merged with
+ * the existing base map (what was created with).  Subsequent calls to this
+ * will throw away previous override settings.
+ *
+ * @param {Object} glmap The custom map to override existing mappings.
+ */
+hterm.VT.CharacterMap.prototype.setOverrides = function(glmap) {
+  this.sync_(glmap);
+};
+
+/**
+ * Return a copy of this mapping.
+ *
+ * @return {hterm.VT.CharacterMap} A new hterm.VT.CharacterMap instance.
+ */
+hterm.VT.CharacterMap.prototype.clone = function() {
+  var map = new hterm.VT.CharacterMap(this.description, this.glmapBase_);
+  if (this.glmap_ !== this.glmapBase_)
+    map.setOverrides(this.glmap_);
+  return map;
+};
+
+/**
+ * Table of character maps.
+ */
+hterm.VT.CharacterMaps = function() {
+  this.maps_ = hterm.VT.CharacterMaps.DefaultMaps;
+
+  // Always keep an unmodified reference to the map.
+  // This allows us to sanely reset back to the original state.
+  this.mapsBase_ = this.maps_;
+};
+
+/**
+ * Look up a previously registered map.
+ *
+ * @param {String} name The name of the map to lookup.
+ * @return {hterm.VT.CharacterMap} The map, if it's been registered.
+ */
+hterm.VT.CharacterMaps.prototype.getMap = function(name) {
+  if (this.maps_.hasOwnProperty(name))
+    return this.maps_[name];
+  else
+    return undefined;
+};
+
+/**
+ * Register a new map.
+ *
+ * Any previously registered maps by this name will be discarded.
+ *
+ * @param {String} name The name of the map.
+ * @param {hterm.VT.CharacterMap} map The map to register.
+ */
+hterm.VT.CharacterMaps.prototype.addMap = function(name, map) {
+  if (this.maps_ === this.mapsBase_)
+    this.maps_ = Object.assign({}, this.mapsBase_);
+  this.maps_[name] = map;
+};
+
+/**
+ * Reset the table and all its maps back to original state.
+ */
+hterm.VT.CharacterMaps.prototype.reset = function() {
+  if (this.maps_ !== hterm.VT.CharacterMaps.DefaultMaps)
+    this.maps_ = hterm.VT.CharacterMaps.DefaultMaps;
+};
+
+/**
+ * Merge custom changes to this table.
+ *
+ * @param {Object} maps A set of hterm.VT.CharacterMap objects.
+ */
+hterm.VT.CharacterMaps.prototype.setOverrides = function(maps) {
+  if (this.maps_ === this.mapsBase_)
+    this.maps_ = Object.assign({}, this.mapsBase_);
+
+  for (var name in maps) {
+    var map = this.getMap(name);
+    if (map !== undefined) {
+      this.maps_[name] = map.clone();
+      this.maps_[name].setOverrides(maps[name]);
+    } else
+      this.addMap(name, new hterm.VT.CharacterMap('user ' + name, maps[name]));
+  }
+};
+
+/**
+ * The default set of supported character maps.
+ */
+hterm.VT.CharacterMaps.DefaultMaps = {};
 
 /**
  * VT100 Graphic character map.
  * http://vt100.net/docs/vt220-rm/table2-4.html
  */
-hterm.VT.CharacterMap.maps['0'] = new hterm.VT.CharacterMap(
+hterm.VT.CharacterMaps.DefaultMaps['0'] = new hterm.VT.CharacterMap(
     'graphic', {
       '\x60':'\u25c6',  // ` -> diamond
       '\x61':'\u2592',  // a -> grey-box
@@ -15480,7 +17928,7 @@ hterm.VT.CharacterMap.maps['0'] = new hterm.VT.CharacterMap(
  * British character map.
  * http://vt100.net/docs/vt220-rm/table2-5.html
  */
-hterm.VT.CharacterMap.maps['A'] = new hterm.VT.CharacterMap(
+hterm.VT.CharacterMaps.DefaultMaps['A'] = new hterm.VT.CharacterMap(
     'british', {
       '\x23': '\u00a3',  // # -> british-pound
     });
@@ -15488,14 +17936,14 @@ hterm.VT.CharacterMap.maps['A'] = new hterm.VT.CharacterMap(
 /**
  * US ASCII map, no changes.
  */
-hterm.VT.CharacterMap.maps['B'] = new hterm.VT.CharacterMap(
+hterm.VT.CharacterMaps.DefaultMaps['B'] = new hterm.VT.CharacterMap(
     'us', null);
 
 /**
  * Dutch character map.
  * http://vt100.net/docs/vt220-rm/table2-6.html
  */
-hterm.VT.CharacterMap.maps['4'] = new hterm.VT.CharacterMap(
+hterm.VT.CharacterMaps.DefaultMaps['4'] = new hterm.VT.CharacterMap(
     'dutch', {
       '\x23': '\u00a3',  // # -> british-pound
 
@@ -15515,8 +17963,8 @@ hterm.VT.CharacterMap.maps['4'] = new hterm.VT.CharacterMap(
  * Finnish character map.
  * http://vt100.net/docs/vt220-rm/table2-7.html
  */
-hterm.VT.CharacterMap.maps['C'] =
-hterm.VT.CharacterMap.maps['5'] = new hterm.VT.CharacterMap(
+hterm.VT.CharacterMaps.DefaultMaps['C'] =
+hterm.VT.CharacterMaps.DefaultMaps['5'] = new hterm.VT.CharacterMap(
     'finnish', {
       '\x5b': '\u00c4',  // [ -> 'A' umlaut
       '\x5c': '\u00d6',  // \ -> 'O' umlaut
@@ -15535,7 +17983,7 @@ hterm.VT.CharacterMap.maps['5'] = new hterm.VT.CharacterMap(
  * French character map.
  * http://vt100.net/docs/vt220-rm/table2-8.html
  */
-hterm.VT.CharacterMap.maps['R'] = new hterm.VT.CharacterMap(
+hterm.VT.CharacterMaps.DefaultMaps['R'] = new hterm.VT.CharacterMap(
     'french', {
       '\x23': '\u00a3',  // # -> british-pound
 
@@ -15555,7 +18003,7 @@ hterm.VT.CharacterMap.maps['R'] = new hterm.VT.CharacterMap(
  * French Canadian character map.
  * http://vt100.net/docs/vt220-rm/table2-9.html
  */
-hterm.VT.CharacterMap.maps['Q'] = new hterm.VT.CharacterMap(
+hterm.VT.CharacterMaps.DefaultMaps['Q'] = new hterm.VT.CharacterMap(
     'french canadian', {
       '\x40': '\u00e0',  // @ -> 'a' grave
 
@@ -15576,7 +18024,7 @@ hterm.VT.CharacterMap.maps['Q'] = new hterm.VT.CharacterMap(
  * German character map.
  * http://vt100.net/docs/vt220-rm/table2-10.html
  */
-hterm.VT.CharacterMap.maps['K'] = new hterm.VT.CharacterMap(
+hterm.VT.CharacterMaps.DefaultMaps['K'] = new hterm.VT.CharacterMap(
     'german', {
       '\x40': '\u00a7',  // @ -> section symbol (double s)
 
@@ -15594,7 +18042,7 @@ hterm.VT.CharacterMap.maps['K'] = new hterm.VT.CharacterMap(
  * Italian character map.
  * http://vt100.net/docs/vt220-rm/table2-11.html
  */
-hterm.VT.CharacterMap.maps['Y'] = new hterm.VT.CharacterMap(
+hterm.VT.CharacterMaps.DefaultMaps['Y'] = new hterm.VT.CharacterMap(
     'italian', {
       '\x23': '\u00a3',  // # -> british-pound
 
@@ -15616,8 +18064,8 @@ hterm.VT.CharacterMap.maps['Y'] = new hterm.VT.CharacterMap(
  * Norwegian/Danish character map.
  * http://vt100.net/docs/vt220-rm/table2-12.html
  */
-hterm.VT.CharacterMap.maps['E'] =
-hterm.VT.CharacterMap.maps['6'] = new hterm.VT.CharacterMap(
+hterm.VT.CharacterMaps.DefaultMaps['E'] =
+hterm.VT.CharacterMaps.DefaultMaps['6'] = new hterm.VT.CharacterMap(
     'norwegian/danish', {
       '\x40': '\u00c4',  // @ -> 'A' umlaut
 
@@ -15638,7 +18086,7 @@ hterm.VT.CharacterMap.maps['6'] = new hterm.VT.CharacterMap(
  * Spanish character map.
  * http://vt100.net/docs/vt220-rm/table2-13.html
  */
-hterm.VT.CharacterMap.maps['Z'] = new hterm.VT.CharacterMap(
+hterm.VT.CharacterMaps.DefaultMaps['Z'] = new hterm.VT.CharacterMap(
     'spanish', {
       '\x23': '\u00a3',  // # -> british-pound
 
@@ -15657,8 +18105,8 @@ hterm.VT.CharacterMap.maps['Z'] = new hterm.VT.CharacterMap(
  * Swedish character map.
  * http://vt100.net/docs/vt220-rm/table2-14.html
  */
-hterm.VT.CharacterMap.maps['7'] =
-hterm.VT.CharacterMap.maps['H'] = new hterm.VT.CharacterMap(
+hterm.VT.CharacterMaps.DefaultMaps['7'] =
+hterm.VT.CharacterMaps.DefaultMaps['H'] = new hterm.VT.CharacterMap(
     'swedish', {
       '\x40': '\u00c9',  // @ -> 'E' acute
 
@@ -15679,7 +18127,7 @@ hterm.VT.CharacterMap.maps['H'] = new hterm.VT.CharacterMap(
  * Swiss character map.
  * http://vt100.net/docs/vt220-rm/table2-15.html
  */
-hterm.VT.CharacterMap.maps['='] = new hterm.VT.CharacterMap(
+hterm.VT.CharacterMaps.DefaultMaps['='] = new hterm.VT.CharacterMap(
     'swiss', {
       '\x23': '\u00f9',  // # -> 'u' grave
 
@@ -15828,4708 +18276,128 @@ lib.resource.add('hterm/audio/bell', 'audio/ogg;base64',
 ''
 );
 
+lib.resource.add('hterm/images/icon-96', 'image/png;base64',
+'iVBORw0KGgoAAAANSUhEUgAAAGAAAABgCAYAAADimHc4AAAABGdBTUEAALGPC/xhBQAAAAFzUkdC' +
+'AK7OHOkAAAAgY0hSTQAAeiYAAICEAAD6AAAAgOgAAHUwAADqYAAAOpgAABdwnLpRPAAAAAZiS0dE' +
+'AP8A/wD/oL2nkwAAAAlwSFlzAAAuIwAALiMBeKU/dgAAFKhJREFUeNrtXXlsXMd5/30z8649uDzE' +
+'mxRFibIsOXZ8VInTJFYSW3actE1ctWkctEF6I0VRFEWAoihQoAjQFmiBogWaIEADFCmQXklto04T' +
+'O0ndWI4bxZalWHJinTYtkRJFkctzl9zd977+8c49+UjuipbCD1y+9+ae75vvmJlv3gO2YRu2YRu2' +
+'YRu2YUuAtroBN3nfeKsaSXWurarvRvUrTnlccV/5a3lDReRKFdc4Za6nzvW2b7OIpwZh7N37iHYi' +
+'Pztyvy4iqA00Tng/WXH1f3GQsFki0Qbz+cAV12jeRkTwwUd2yfsVI89OjbLrwnoJILw8EoAOIAFg' +
+'LwDTCxcAJBEJIiIAgoiICAIgIgIBJGpdPRCRq3sPCBAJAii8QgAk/PIFkSBBQvh3QRkQXtECBKpx' +
+'H9br5hMikhcg4QV4dYkgARFBSkmlUmnp7LmLX8rl8q95OPKJ0DQCkPeTEcQrAD179+7+7LsP3vtJ' +
+'w9A1ZvbwFfQM/r1/AyD64KLBv5JHIaIwIpI5GIbevd82r0I3OMjvJfOo5ffCqw1EhIRlQQi3a37p' +
+'0atfTVB22PhIuHt95tnnBr75zHN/AGASoYjyxVVTCOCPfOWN9sGfue+df/L4r3z8MSGUOv3aWYDI' +
+'q43BEXXEQRPCQK5qFleFMdduOwMV3WKUBXFVyVXhtm3jrjtvw13vuL1uPXGAAUghkGlLPXJ9ZvZz' +
+'L738oz8HsOhFF2u3aH0E8JEvAWhe+n2PHD70Z7/xmccfLBSK9M1nX0AqnYFSKiB7fIiOzg3k21Be' +
+'YHW1gMkr1/DBB+6HkGLTxmRfbxf9+qc/8WszM9lzF99468twxZCAq5wbQiMCREWPBkDXde3eI489' +
+'+he/+1u/et/c3AK+/uSzyLTvgK7rm+tBE4CZA1HRaFT7oqNQKCCdsqBp61GD9eHBD77XunJ16o/+' +
+'6q+/cLJYLP2fhzfGGkRYiwBRK2fnL/3iRz7/uT/8nfuuz2Txla8+hXRbJ6QUKBaLuJmgVLJRKuSh' +
+'lIBpatiEFApACIFHH/lA//NHj33qe0ePvQJXEa/JnHEIoABYd925/zOPf+JjBxMJC//yxX+GYaZg' +
+'GAZse00ue1uByyWMQrGEldVVKCWbQgAA6OnegQP7997zvaPH2gGsIpQidWuoRwA/o2/bDz70off+' +
+'nFIa/fczz2Pq2hzSbRksLCxsNT43BI7jYCW/ihd/cBKWZTZhQcFV9qMjQ0gmEwm4hkqsOVEjDogq' +
+'37bOjvaElBKLizmYVgKWZW01HjeOLGaAbUipoJTWHAKwa4KYpmHCJUB0lQCoU0scK0gCMJRSqqOj' +
+'Hel0EqZpIpFIbDUeNwwOM2y7gO4dnWhrSzVFBDEzMpkULNM04BIgFsS1ggxNUzKVSiCRsEBEUEoF' +
+'iRq2v5HNXjMd18pSHVeZnuuniZaopIIQBAIhnUqgvb1tU3OBKFiWCdMydABWBH+bIoCvA3RNU9Ky' +
+'DOiahG2XAAAzszO4NHkZINcKALuddRHi3VWFReLcWy8dhxO5aFpvkhamD5HFwQQuStgwLPpsOza4' +
+'5GD/yD4MDw2jVCrCMHSkUwmws3kCMADD0GCZpialMG3bia4trVsJ+xkJAKSUStM0oWsSQrgTGdu2' +
+'MXllEmezF/HRhz+C4b6hyEgrnyjVLLzhcho1iFsDiGomOzt+Ds/8z7PIzmfR39eP1dVVSOEijR0n' +
+'RsFrg1ISpmkoQ9cTufxKrBbHmoUoJZWmlPDXRZgdMDNsx8HuXbtx3zvvhRQKTdFmLQACoT2dwY9e' +
+'fRWlvA1m1xJy2IEggkPrnUvXB9M0lGkaiVx+xR/ADQuPRQAppaY0JfzOBB0joFAs4Oyb59E0Y7pF' +
+'4DDDdmw47LgygQHbbs7Ij4JpGMIwjGRFcF0xFJcDdE0pUb3YQ1hYWsDFSxff7vgHMyO3kkMGiaAP' +
+'zScAwzB0YVlmAuHo3zQHkKaUppTHAUQBLQnAYm4J41feCldAGeHe2FaCq9fdXQMP8qt5sB6OlGbP' +
+'4pkBwzBgGHoKMdcIG82Ew0RK6UqTxHAJEHSBCLmVHCavXwUcwGpXMJIS2YnVhrq01cAOQxkC7YMG' +
+'5i6vwi65LV4trIK10GJyHLvpTTR0DZZlJtEEMxR+IVJJTSlFAFdZL47joFgswrEZ3X06Dv3eAH78' +
+'7Vm8/t0s8nMld9PjBhHCN1G7dlm490g3rIzCt/5yHIWiA5dxGQ5HOcBpatuYGZquwTSNTXMAogVo' +
+'SukuAXwlzFUpSRCyl1cx+VoOBz/Zi93vyeDE16bx1iuLsIsOSLSWCuwwEh0a9h/uxDs+2gWnxDj+' +
+'79dQKjhlg4bZl/vkiaDmtkvXNFimmURMJ4VYOkBpSldSug91TDYiIDdXwtEvTeDNlxZw3y/34PDn' +
+'duLCi/M4+eQ0Zt5cCdI1G/FKFxg5mME9R7rRMWTi/AtzOPnENLKXV2tyrA+lFqzkKk3BNI0k3BWE' +
+'5swDXA7wlm0bFEkEODbjzWPzmDqTw4HDnbjz57swdHcKp56+jte/k0VurtRUInSPJXD3Y90YfXcb' +
+'Zt7I49t/M45LJ5ZgF7lMAbsN9BfiXE5uthXEzFBK+TpAhrVunAAEeEp4DQ4oyyQI+fkSjn/tGsZf' +
+'WcA9j3Xjvk/0Yte72vD8FyZw/Y2VauRsAA483ImDn+oF28DL/zqFn3wni/xcESSoTvkExxdBBNil' +
+'FnCAlLBMM+Hhdk3HtThoIE1TulTuDlscAgAuNxCA6XN5HP+Pa8heWsHAgSQyA0ZzFr8IGHhHCuke' +
+'HedfmMOpb8wgly021jXkTsjYm9C0YjNJSgFvHuAP7qbMA3TpcwAo1ooDOwwjKTH2QDvu/lg3lCnw' +
+'g69cxcSpJc8dZJPgACeeuAYhgf0Pd6JjyMArX5/GlZ8sg23U5TCf+ESt0QFCCFiWYcF131kT4lhB' +
+'pDSXAMy+Eq1PAXYAIYHBu9O490g3evclMf7yAk785zSuX8i7Y68ZOoCA6xdW8N2/u4TRd2dw75Fu' +
+'PPqnu3Dmu7N49RszWLiyGvgGRfM47HjNdzmg6U6kRLAs02wGAXwieBwgggoaMUD7oI67fmEHbjvU' +
+'gfmrBTz395fw5ksLKK26pmgzO0wCsFcZ576XxeTpZdzxaCfu+HAXRg624eST0zh/dB6FXDjK3TUg' +
+'VwQREUot0AFCEEx3U8ZoBgEAVwdoUnheFnWGLztA1y4Tj/zxCIyUwI+emsaPn5nF8qyvFFs0D/C8' +
+'05Zni3jpq1MY/+EC7jnSg/f+5gB69yXw/BcnYBfDIeMrYaLW6ACAYFmmjpi7YqpmCRWMq2maLgIO' +
+'qFcUQ7MErp5ZxqmnZ0Jx0+IJWNBIr5qpszl852/fwp73ZNC3PwmhKCQAUWCGAu5MuNlriEQEy6za' +
+'FauLhHg6QClNejte9YQICcL1i3k8/4UJd/bZZHETGwGCYK8yzjw3h4vHFmAXym19dxfNE0Etcqkx' +
+'TVPTdd0qFApRPNaEtcxQAiA0TelCeKvRDTSoXWTYJb5ho75Rq0kApbwDrphrOREd0Ip5AOBuyhiG' +
+'HsttpB4BohiUmqZpgel4Mx1qournYCbcUg4wpLccUasVZVCLAJUZhKaUTp5hvTWCpXnAcEIOsG00' +
+'fxuVYRq6MA3dX5JuCGt5xhEAqWkq4IC4M+GYbV0/bLJ6h92dmlaJIG9ThkyzbE9gQ0rYB6lpSgUc' +
+'0CT8C0nQzPUvCDk2o7iysUU0gmsFcSCCnJZspeq6BtPUk3HSxrGChKZpmu/U2gwKsMPo2Z/E+397' +
+'AELFL48EMHFqGd//x0k49gYwR+VWUGvmAQxD12GZZgox1tpiuSa6HOCJIJ8umxo5hELOxvSFPEiu' +
+'IxcR5idXNzVqqwnQXBZghr8r5m/KbHgxzs+oNE1T/sBvhggiAcyOr+B//+FyUzsfD0ERM7RFIkjT' +
+'gj2BNTmgnhUUXcd2N4SpBUp4C6DVHABmaEr5+8L+rtiGlTADUK4I8kJ8XeDDes/KAw37zPUSrYUn' +
+'5tpJOJqE4ThOSACn+RzAAKSU/p7AmgI2phWkyeB4ZqQiAsFZtkFOZI+Ao7SgytVgeJoQVBkf+HRG' +
+'rxVhVBFGqHj24imSP3psFUAylYCSEsWSDdu2y86WNQukuytmIdwVq3tSJo5zrtI0JUMjiAJzbrB/' +
+'AA8YRnCWNnLON3JuFyEiIj8AZen9Vc0wL0JkRtMgGlfjDHBwDSLKzwp7dRZL+aYivZwAApZlWnAP' +
+'t0TxuSYBKocCA1BKUxIgMBy0taUAOCiVikilUkin0/FbFnEz3xxQLGMg6rpemX9paQm37x2DlLLM' +
+'U6IZIITwOUCraEAVERotR4ccoDQJAI7DGBrsx8MP3o+nv/V9dHf3BAc1IjguO00d+OpHffYrw5ir' +
+'09WMi5wd4PC8QLDHXHGmIHr1G8dgsOOgoyOJB973LjR/KSLYFYtuymxYCZOUUtM8z2i/w48cPgTT' +
+'MPDD46eQX1mG768Smqq+qAFEROwIQSASZVdBAiQIQggI8q7+c/AjSCEgZBgm/TgZ3stovKy4Rsqz' +
+'LBMjOweRSiXhNOFwRi0CmJbhE2BTm/KspNQ0pcrMVaUkDj/0fnzg0P0olkqhs+4a71xoeA0LKCur' +
+'Irhmf2rJzca9cl0Um3U0qZoAqNwV25AS9pEdnA2IguM4kFLC95bYLPiiJYIjtEI83BggWKapCSEs' +
+'x3E2txinlPJOx9z8k7AbBUTBSRkrl8tv+GUdDIClksphFsvL+ZacKLn1gL3V0DICrOuQXvSohUNE' +
+'2rnz41QqcdPNtVsRGEBbOgnbdkjTVKUZWgWqRn4fHABOoVBcNE2ztHPnoL7NAfHANHS8dPzE0sxM' +
+'dsILqvsGrXocEGRYXFx67fUz5y729e7Yw4ADjumb2AJoWq2xCtrwdh0TQRz74YmLpZI9HitHjTCC' +
+'a0KZANKGoX88lUo+pCmlhBASYMmAjE76Ea4CoNyerDYuUZHRXwiq2Pan8r/yNkcMAiqvv+pwFFWm' +
+'pQqbl6isaqoVVtajsJfB0piXwCEidhyHp6/PHpudnfs8gDm4b07xX+xXBnEW43jv2Ojo73/20x+e' +
+'zc47Fy6MN/IOXZ+ZxBvIE6eeCovbn0FXzjXqt4urEsVlGsPQ8NFHP0RP/dez4sv/9G8ZuK8wq2uK' +
+'xtkRs+44cNs7e3t61NEXXwVIVUye1o+f+nnXsT1ZlrwiH9dKjLp+TZVhoRNy/Jb5PrPjlyfAzDiw' +
+'f28vgD4AV+AuS5dq5au3FuS/I0IB6B3bM7L7wsW3IJSBjvb2ls0gb3YgIiym0hi/NImB/p5Mpi09' +
+'Or+weBqu+CliHYtx/ruCpGWZu3cOD/Sceu08ioUiFhcX12rHTy0QEXTdwKVLV7B/326tt3fHnvmF' +
+'RQMu8v03aAERIjTyC5IAtJGdg/s7OjLmbHYBXV29TVt6uFVB13VMXZtFwrIwMNA3dvbcGxaAFYQb' +
+'9LE5QAFI7Nk9cgdAyOeL2CFlS8XPrbDUoZTC4lIexVIJw0P9IwDScBVxzVOT9QggvbiuvWOjY9ns' +
+'PBxmLC0tbc+G1wApJWyHMTObxcjwYB+ALgBTCN8+WTYpa0QAQUTDu0eH+ycmp5BOtyGVSm0r4Big' +
+'6wYmJqYwNNTfIaXss237DEIRVMYFUQIEnnDwOGBwoG9ff19P+tXT52BZiVtCRLS6D8wM0zRx6fJV' +
+'/Oz991jdOzp3Xp2a9iVKlTlayQFR89PYPTp8wLJMys4tItNuYH5+fqvx97YHIQQ0XcfUtRmkUgnq' +
+'7+8duTo1raGOj1AlB0TnAOm9Y6O35XJ5MAskk8lt8bMOmMzOwHEYw0P9IydOnjYR6oC6BADK5wD9' +
+'e8d2DV65Og3dMKGUuuUUcCvFkcPA/PwCRnYODAJoA3AdNRy1anGABCA7O9vHRnYOdrx84sdgBubm' +
+'5rY5ICa4m/8Sk1enMTQ00A2gG8BbKOcCBmpzgASgj44M7+/oaJfXpmfR3t5xy07AWsUFhUIRlyem' +
+'cOcde9OpVHJgaWn5FawhgqLfhkmOje26nZmRyxXQtePmfU3xVoFpmbg2PYtMW1rr6+3eeX5pOaqE' +
+'gyWJShHkJ9px297RXddnsiiWbCwuLv5UiJ9aX/bYSBlE7nV5OYe2dAqDA727zl94s5IAZSIoKv9F' +
+'ImHt2rN7pDs7N4/l5WVIOesRwH8Tbs2qgwvXi6uKr9PB+u8ujomSeKlonZG0RmRl6AcPHcTAQC8G' +
+'B/uGEb5RPToh46j3bhCxc3hg39Bgn9nbswPpVBK53ErZR2tqOV358eVx4X2wzRRx2K103q12yEXo' +
+'5Bvcry99I4ewuI5kYdsj6SIOxV5omXOwphS6ujoghMDw0EAvXEvoSgTfAKrfaUMA9F0jQ7d3d3ch' +
+'k0njoQ+9b83NiK0VTnHendOqdnLdIIY7K3YJ0N8ppeixbecMYixFpHaNDI+mU0n3pdl8a9n+NxJ8' +
+'7ujv7030dO8YvHL1mr8zWsYBlZrZymTSKaUlQNLAVo/vmxsIxCV0tLeJzs72bo8AboSH71qroStL' +
+'S8u567PzyK86G9ox32yjW1lU6/sTrYFhmQqWZSGdSmZqpVZlqV3IzcxkZ6evTWFpebWmT2+tj6MF' +
+'76OtdbSL61gyzDXTlZ0hKE9Q9rEGrrK8uELec1Vc+bcJIvfRwyM1wpiry2sU5opvRqYtCcuUKBSK' +
+'JYQf/QzcFX0CRN0Rc8dPnD5qJZ7okVKCHYd8V27/RRcM9gAAewc/2bsLH+GnCf+Xp/PmFsFtEBum' +
+'Lqss8oTIX9lzUFCQJ9rAijRV92VtjTxHyquqpKzLjn+Fu+xsKyULzLzyxhuXnkSNL66WnYRB+KnC' +
+'DNydHP/dZzpCU7WWUuAGzxwjvlYZ9cLWm4cbxMUpD2vkqQzzkVwEUIC7Gb/iXQvez3fSYlWR0YZL' +
+'uUUvkYHw453+JGK9EKdTrdT0Db2TW9CO6DeGSyhHetWXVqOfvXAq7m0vY9xvBW+28RvJ3ygP4ca3' +
+'KcpJUU7wER/VAQBqK2H/DRZ+hspDe81EYKsQsZV1Vg7oKNKjyGegsXNuFOE302Ywr/G8Fe2pq4fq' +
+'IfZmQvjbHbZ6AGzDNmzDNmzD2xT+H+5UT7Tyxc2HAAAAJXRFWHRkYXRlOmNyZWF0ZQAyMDE2LTA2' +
+'LTMwVDExOjUwOjAyLTA0OjAwOaSkCgAAACV0RVh0ZGF0ZTptb2RpZnkAMjAxMy0xMS0wMVQxMDoz' +
+'ODoyNC0wNDowMNba8BsAAAAASUVORK5CYII=' +
+''
+);
+
 lib.resource.add('hterm/concat/date', 'text/plain',
-'Tue, 11 Nov 2014 22:00:58 +0000' +
+'Sat, 28 Oct 2017 00:30:28 +0000' +
 ''
 );
 
 lib.resource.add('hterm/changelog/version', 'text/plain',
-'1.51' +
+'1.74' +
 ''
 );
 
 lib.resource.add('hterm/changelog/date', 'text/plain',
-'2014-11-11' +
+'2017-10-27' +
 ''
 );
 
 lib.resource.add('hterm/git/HEAD', 'text/plain',
-'85b71d6a17aabeaa979ee9d4eb090db553461402' +
+'git rev-parse HEAD' +
 ''
 );
 
-// SOURCE FILE: wam/js/wam.js
-// Copyright (c) 2013 The Chromium OS Authors. All rights reserved.
-// Use of this source code is governed by a BSD-style license that can be
-// found in the LICENSE file.
-
-'use strict';
-
-var wam = {};
-
-/**
- * This is filled out during the concat process, either from
- * concat/wam_test_deps.concat or concat/wam_fs.concat
- */
-wam.changelogVersion = null;
-
-/**
- * Namespace for transport classes.
- */
-wam.transport = {};
-
-/**
- * Namespace for the binding classes that sit between concrete implementations.
- */
-wam.binding = {};
-
-/**
- * Namespace for the Request/Response classes that marshal bindings over a
- * wam connection.
- */
-wam.remote = {};
-
-wam.remote.closeTimeoutMs = 5 * 1000;
-
-/**
- * Shortcut to wam.errorManager.createValue.
- */
-wam.mkerr = function(name, argList) {
-  return wam.errorManager.createValue(name, argList);
-};
-
-/**
- * Promise based setImmediate polyfill.
- */
-wam.setImmediate = function(f) {
-  var p = new Promise(function(resolve) { resolve() });
-  p.then(f)
-   .catch(function(ex) {
-       if ('message' in ex && 'stack' in ex) {
-         console.warn(ex.message, ex.stack);
-       } else {
-         if (lib && lib.TestManager &&
-             ex instanceof lib.TestManager.Result.TestComplete) {
-           // Tests throw this non-error when they complete, we don't want
-           // to log it.
-           return;
-         }
-
-         console.warn(ex);
-       }
-     });
-};
-
-/**
- * Shortcut for setImmediate of a function bound to static args.
- */
-wam.async = function(f, args) {
-  wam.setImmediate(f.bind.apply(f, args));
-};
-
-
-/**
- * Make a globally unique id.
- *
- * TODO(rginda) We probably don't need to use crypto entropy for this.
- */
-wam.guid = function() {
-  var ary = new Uint8Array(16)
-  window.crypto.getRandomValues(ary);
-
-  var rv = '';
-  for (var i = 0; i < ary.length; i++) {
-    var byte = ary[i].toString(16);
-    if (byte.length == 2) {
-      rv += byte;
-    } else {
-      rv += '0' + byte;
-    }
-  }
-
-  return rv;
-};
-// Inserted by libdot/concat/wam_fs.concat
-wam.changelogVersion = '1.1';
-// SOURCE FILE: wam/js/wam_channel.js
-// Copyright (c) 2013 The Chromium OS Authors. All rights reserved.
-// Use of this source code is governed by a BSD-style license that can be
-// found in the LICENSE file.
-
-'use strict';
-
-/**
- * wam.Channel directs messages to a companion instance of wam.Channel
- * on the other side of an abstract "transport".
- *
- * @param {Object} A transport object.  See wam.DirectTransport and
- *     wam.ChromePortTransport for the de-facto interface.
- */
-wam.Channel = function(transport, opt_name) {
-  transport.readyBinding.assertReady();
-
-  this.transport_ = transport;
-  this.transport_.onMessage.addListener(this.onTransportMessage_, this);
-  this.transport_.readyBinding.onClose.addListener(
-      this.onTransportClose_, this);
-  this.transport_.readyBinding.onReady.addListener(
-      this.onTransportReady_, this);
-
-  this.readyBinding = new wam.binding.Ready();
-  this.readyBinding.onClose.addListener(this.onReadyBindingClose_, this);
-
-  if (this.transport_.readyBinding.isReadyState('READY'))
-    this.readyBinding.ready();
-
-  /**
-   * Called when the remote end requests a handshake.
-   *
-   * The event handler will be passed a wam.ReadyResponse, and should
-   * call its replyReady method to accept the handshake.  Use the closeError
-   * method to reject the handshake with a specific reason, or do nothing and
-   * the handshake will be fail by default with a wam.Error.HandshakeDeclined
-   * error.
-   *
-   * By the time this event is invoked the channel has already checked the
-   * channelProtocol name and version.
-   */
-  this.onHandshakeOffered = new wam.Event();
-
-  /**
-   * Messages we sent that are expecting replies, keyed by message subject.
-   */
-  this.openOutMessages_ = {};
-
-  /**
-   * Bitfield of verbosity.
-   */
-  this.verbose = wam.Channel.verbosity.NONE;
-
-  /**
-   * Name to include as a prefix in verbose logs.
-   */
-  this.name = opt_name || 'ch-' + (wam.Channel.nameSequence_++).toString(16);
-};
-
-wam.Channel.verbosity = {
-  /**
-   * Log nothing.  (Assign to wam.Channel..verbose, rather than bitwise OR.)
-   */
-  'NONE': 0x00,
-
-  /**
-   * Log messages sent from this channel.
-   */
-  'OUT': 0x01,
-
-  /**
-   * Log messages received by this channel.
-   */
-  'IN': 0x02,
-
-  /**
-   * Log synthetic messages that appear on this channel.
-   */
-  'SYNTHETIC': 0x04,
-
-  /**
-   * Log all of the above.
-   */
-  'ALL': 0x0f
-};
-
-wam.Channel.nameSequence_ = 0;
-
-/**
- * Shared during the handshake message.
- */
-wam.Channel.protocolName = 'x.wam.Channel';
-
-/**
- * Shared during the handshake message.
- */
-wam.Channel.protocolVersion = '1.0';
-
-/**
- * Return a summary of the given message for logging purposes.
- */
-wam.Channel.prototype.summarize_ = function(message) {
-  var rv = message.name;
-
-  if (message.subject)
-    rv += '@' + message.subject.substr(0, 5);
-
-  if (message.regardingSubject) {
-    rv += ', re:';
-    if (message.regardingMessage) {
-      rv += message.regardingMessage.name + '@';
-    } else {
-      rv += '???@';
-    }
-    rv += message.regardingSubject.substr(0, 5);
-  }
-
-
-  return rv;
-};
-
-wam.Channel.prototype.reconnect = function() {
-  if (this.transport_.readyBinding.isReadyState('READY'))
-    this.transport_.readyBinding.closeOk(null);
-
-  this.readyBinding.reset();
-  this.transport_.reconnect();
-};
-
-wam.Channel.prototype.disconnect = function(diagnostic) {
-  var outMessage = new wam.OutMessage(
-      this, 'disconnect', {diagnostic: diagnostic});
-
-  outMessage.onSend.addListener(function() {
-      if (this.readyBinding.isOpen)
-        this.readyBinding.closeOk(null);
-    }.bind(this));
-
-  outMessage.send();
-};
-
-/**
- * Send a message across the channel.
- *
- * This method should only be called by wam.OutMessage..send().  Don't call
- * it directly or you'll miss out on the bookkeeping from OutMessage..send().
- *
- * @param {wam.OutMessage} outMessage The message to send.
- * @param {function()} opt_onSend Optional callback to invoke after the message
- *     is actually sent.
- */
-wam.Channel.prototype.sendMessage = function(outMessage, opt_onSend) {
-  if (this.verbose & wam.Channel.verbosity.OUT) {
-    console.log(this.name + '/OUT: ' + this.summarize_(outMessage) +
-                ',', outMessage.arg);
-  }
-
-  this.transport_.send(outMessage.toValue(), opt_onSend);
-};
-
-/**
- * Send a value to this channel as if it came from the remote.
- *
- * This is used to cleanly close out open messages in the event that we lose
- * contact with the remote, or they neglect to send a required final reply.
- */
-wam.Channel.prototype.injectMessage = function(
-    name, arg, opt_regardingSubject) {
-
-  var inMessage = new wam.InMessage(
-      this, {name: name, arg: arg, regarding: opt_regardingSubject});
-  inMessage.isSynthetic = true;
-
-  wam.setImmediate(this.routeMessage_.bind(this, inMessage));
-
-  return inMessage;
-};
-
-/**
- * Create the argument for a handshake message.
- *
- * @param {*} payload Any "transportable" value.  This is sent to the remote end
- *     to help it decide whether or not to accept the handshake, and how to
- *     deal with subsequent messages.  The current implementation expects a
- *     `null` payload, and assumes that means you want to talk directly to
- *     a wam.fs.Directory.
- * @return {wam.ReadyRequest}
- */
-wam.Channel.prototype.createHandshakeMessage = function(payload) {
-  return new wam.OutMessage
-  (this, 'handshake',
-   { channelProtocol: {
-       name: wam.Channel.protocolName,
-       version: wam.Channel.protocolVersion
-     },
-     payload: payload
-   });
-};
-
-wam.Channel.prototype.cleanup = function() {
-  // Construct synthetic 'error' messages to close out any orphans.
-  for (var subject in this.openOutMessages_) {
-    this.injectMessage('error',
-                       wam.mkerr('wam.Error.ChannelDisconnect',
-                                 ['Channel cleanup']),
-                       subject);
-  }
-};
-
-/**
- * Register an OutMessage that is expecting replies.
- *
- * Any incoming messages that are 'regarding' the outMessage.subject will
- * be routed to the onReply event of outMessage.
- *
- * When the message is closed it will automatically be unregistered.
- *
- * @param {wam.OutMessage} The message to mark as open.
- */
-wam.Channel.prototype.registerOpenOutMessage = function(outMessage) {
-  var subject = outMessage.subject;
-
-  if (!outMessage.isOpen || !subject)
-    throw new Error('Message has no subject.');
-
-  if (subject in this.openOutMessages_)
-    throw new Error('Subject already open: ' + subject);
-
-  outMessage.onClose.addListener(function() {
-      if (!(subject in this.openOutMessages_))
-        throw new Error('OutMessage not found.');
-
-      delete this.openOutMessages_[subject];
-    }.bind(this));
-
-  this.openOutMessages_[subject] = outMessage;
-};
-
-/**
- * Return the opened message associated with the given subject.
- *
- * @return {wam.OutMessage} The open message.
- */
-wam.Channel.prototype.getOpenOutMessage = function(subject) {
-  if (!(subject in this.openOutMessages_))
-    return null;
-
-  return this.openOutMessages_[subject];
-};
-
-/**
- * Route an incoming message to the correct onReply or channel message handler.
- */
-wam.Channel.prototype.routeMessage_ = function(inMessage) {
-  if ((this.verbose & wam.Channel.verbosity.IN) ||
-      (inMessage.isSynthetic &&
-       this.verbose & wam.Channel.verbosity.SYNTHETIC)) {
-    console.log(this.name + '/' + (inMessage.isSynthetic ? 'SYN: ' : 'IN: ') +
-                this.summarize_(inMessage) +
-                ',', inMessage.arg);
-  }
-
-  if (inMessage.regardingSubject) {
-    if (!inMessage.regardingMessage) {
-      // The message has a regardingSubject, but no corresponding
-      // regardingMessage was found.  That's a problem.
-      console.warn(this.name + ': Got message for unknown subject: ' +
-                   inMessage.regardingSubject);
-      console.log(inMessage);
-
-      if (inMessage.isOpen)
-        inMessage.replyError('wam.Error.UnknownSubject', [inMessage.subject]);
-      return;
-    }
-
-    try {
-      inMessage.regardingMessage.onReply(inMessage);
-    } catch(ex) {
-      console.error('onReply raised exception: ' + ex, ex.stack);
-    }
-
-    if (inMessage.isFinalReply) {
-      if (!inMessage.regardingMessage.isOpen) {
-        console.warn(this.name + ': Outbound closed a regardingMessage that ' +
-                   'isn\'t open: outbound: ' +
-                   inMessage.regardingMessage.name + '/' +
-                   inMessage.regardingSubject + ', ' +
-                   'final reply: ' + inMessage.name + '/' + inMessage.subject);
-      }
-
-      inMessage.regardingMessage.onClose();
-    }
-
-  } else {
-    console.log
-    inMessage.dispatch(this, wam.Channel.on);
-  }
-};
-
-wam.Channel.prototype.onReadyBindingClose_ = function(reason, value) {
-  this.cleanup();
-};
-
-/**
- * Handle a raw message from the transport object.
- */
-wam.Channel.prototype.onTransportMessage_ = function(value) {
-  this.routeMessage_(new wam.InMessage(this, value));
-};
-
-wam.Channel.prototype.onTransportReady_ = function() {
-  this.readyBinding.ready();
-};
-
-/**
- * Handler for transport disconnects.
- */
-wam.Channel.prototype.onTransportClose_ = function() {
-  if (!this.readyBinding.isOpen)
-    return;
-
-  this.readyBinding.closeError('wam.Error.TransportDisconnect',
-                               ['Unexpected transport disconnect.']);
-};
-
-/**
- * Message handlers, bound to a wam.Channel instance in the constructor.
- *
- * These functions are invoked with an instance of wam.fs.Channel
- * as `this`, in response to some inbound wam.Message.
- */
-wam.Channel.on = {};
-
-/**
- * Remote end initiated a disconnect.
- */
-wam.Channel.on['disconnect'] = function(inMessage) {
-  this.readyBinding.closeError('wam.Error.ChannelDisconnect',
-                               [inMessage.arg.diagnostic]);
-};
-
-/**
- * Remote end is offering a handshake.
- */
-wam.Channel.on['handshake'] = function(inMessage) {
-  if (inMessage.arg.channelProtocol.name != wam.Channel.protocolName) {
-    inMessage.replyError('wam.Error.InvalidChannelProtocol',
-                         [inMessage.arg.channelProtocol.name]);
-    return;
-  }
-
-  if (inMessage.arg.channelProtocol.version !=
-      wam.Channel.protocolVersion) {
-    inMessage.replyError('wam.Error.InvalidChannelVersion',
-                         [inMessage.arg.channelProtocol.version]);
-    return;
-  }
-
-  var offerEvent = {
-    inMessage: inMessage,
-    response: null
-  };
-
-  this.onHandshakeOffered(offerEvent);
-
-  if (!offerEvent.response) {
-    inMessage.replyError('wam.Error.HandshakeDeclined',
-                         ['Declined by default.']);
-  }
-};
-// SOURCE FILE: wam/js/wam_error_manager.js
-// Copyright (c) 2013 The Chromium OS Authors. All rights reserved.
-// Use of this source code is governed by a BSD-style license that can be
-// found in the LICENSE file.
-
-'use strict';
-
-wam.errorManager = {};
-wam.errorManager.errorDefs_ = {};
-
-wam.errorManager.defineError = function(errorName, argNames) {
-  wam.errorManager.errorDefs_[errorName] = {
-    'errorName': errorName, 'argNames': argNames
-  };
-};
-
-wam.errorManager.defineErrors = function(/* ... */) {
-  for (var i = 0; i < arguments.length; i++) {
-    this.defineError(arguments[i][0], arguments[i][1]);
-  }
-};
-
-wam.errorManager.normalize = function(value) {
-  var errorName = value.errorName;
-  var errorArg = value.errorArg;
-
-  if (!name) {
-    errorName = 'wam.Error.InvalidError';
-    errorArg = {value: value};
-  }
-
-  if (!this.errorDefs_.hasOwnProperty(errorName)) {
-    errorName = 'wam.Error.UnknownError';
-    errorArg = {errorName: errorName, errorArg: arg};
-  }
-
-  var errorDef = this.errorDefs_[name];
-  for (var argName in errorDef.argNames) {
-    if (!argMap.hasOwnProperty(argName))
-      argMap[argName] = null;
-  }
-
-  return {errorName: errorName, errorArg: errorArg};
-};
-
-wam.errorManager.createValue = function(name, argList) {
-  var errorDef = this.errorDefs_[name];
-  if (!errorDef)
-    throw new Error('Unknown error name: ' + name);
-
-  if (argList.length != errorDef.argNames.length) {
-    throw new Error('Argument list length mismatch, expected ' +
-                    errorDef.argNames.length + ', got ' + argList.length);
-  }
-
-  var value = {
-    'errorName': errorDef.errorName,
-    'errorArg': {}
-  };
-
-  for (var i = 0; i < argList.length; i++) {
-    value['errorArg'][errorDef.argNames[i]] = argList[i];
-  }
-
-  return value;
-};
-// SOURCE FILE: wam/js/wam_errors.js
-// Copyright (c) 2013 The Chromium OS Authors. All rights reserved.
-// Use of this source code is governed by a BSD-style license that can be
-// found in the LICENSE file.
-
-'use strict';
-
-wam.errorManager.defineErrors
-(
- ['wam.Error.ChannelDisconnect', ['diagnostic']],
- ['wam.Error.CloseTimeout', []],
- ['wam.Error.HandshakeDeclined', ['diagnostic']],
- ['wam.Error.InvalidChannelProtocol', ['channelProtocol']],
- ['wam.Error.InvalidChannelVersion', ['channelVersion']],
- ['wam.Error.ReadyAbort', ['abortErrorArg']],
- ['wam.Error.ParentClosed', ['name', 'arg']],
- ['wam.Error.TransportDisconnect', ['diagnostic']],
- ['wam.Error.UnknownMessage', ['name']],
- ['wam.Error.UnexpectedMessage', ['name', 'arg']],
- ['wam.Error.UnknownPayload', []],
- ['wam.Error.UnknownSubject', ['subject']]
-);
-// SOURCE FILE: wam/js/wam_event.js
-// Copyright (c) 2013 The Chromium OS Authors. All rights reserved.
-// Use of this source code is governed by a BSD-style license that can be
-// found in the LICENSE file.
-
-'use strict';
-
-/**
- * An event is a JavaScript function with addListener and removeListener
- * properties.
- *
- * When the endpoint function is called, the firstCallback will be invoked,
- * followed by all of the listeners in the order they were attached, then
- * the finalCallback.
- *
- * The returned function will have the list of callbacks, excluding
- * opt_firstCallback and opt_lastCallback, as its 'observers' property.
- *
- * @param {function(...)} opt_firstCallback The optional function to call
- *     before the observers.
- * @param {function(...)} opt_finalCallback The optional function to call
- *     after the observers.
- *
- * @return {function(...)} A function that, when called, invokes all callbacks
- *     with whatever arguments it was passed.
- */
-wam.Event = function(opt_firstCallback, opt_finalCallback) {
-  var ep = function() {
-    var args = Array.prototype.slice.call(arguments);
-
-    var rv;
-    if (opt_firstCallback)
-      rv = opt_firstCallback.apply(null, args);
-
-    if (rv === false)
-      return;
-
-    for (var i = ep.observers.length - 1; i >= 0; i--) {
-      var observer = ep.observers[i];
-      observer[0].apply(observer[1], args);
-    }
-
-    if (opt_finalCallback)
-      opt_finalCallback.apply(null, args);
-  }
-
-  /**
-   * Add a callback function.
-   *
-   * @param {function(...)} callback The function to call back.
-   * @param {Object} opt_obj The optional |this| object to apply the function
-   *     to.  Use this rather than bind when you plan on removing the listener
-   *     later, so that you don't have to save the bound-function somewhere.
-   */
-  ep.addListener = function(callback, opt_obj) {
-    if (!callback)
-      throw new Error('Missing param: callback');
-
-    ep.observers.unshift([callback, opt_obj]);
-  };
-
-  /**
-   * Remove a callback function.
-   */
-  ep.removeListener = function(callback, opt_obj) {
-    for (var i = 0; i < ep.observers.length; i++) {
-      if (ep.observers[i][0] == callback && ep.observers[i][1] == opt_obj) {
-        ep.observers.splice(i, 1);
-        break;
-      }
-    }
-  };
-
-  ep.observers = [];
-
-
-  return ep;
-};
-// SOURCE FILE: wam/js/wam_transport_chrome_port.js
-// Copyright (c) 2013 The Chromium OS Authors. All rights reserved.
-// Use of this source code is governed by a BSD-style license that can be
-// found in the LICENSE file.
-
-'use strict';
-
-/**
- * This is the chrome message port based transport.
- */
-wam.transport.ChromePort = function() {
-  // The underlying Chrome "platform app" port.
-  this.port_ = null;
-
-  this.extensionId_ = null;
-
-  this.readyBinding = new wam.binding.Ready();
-  this.readyBinding.onClose.addListener(this.onReadyBindingClose_.bind(this));
-
-  this.onMessage = new wam.Event();
-};
-
-wam.transport.ChromePort.prototype.setPort_ = function(port) {
-  if (this.port_)
-    throw new Error('Port already set');
-
-  this.port_ = port;
-  var id = port.sender ? port.sender.id : 'anonymous';
-
-  var thisOnMessage = function(msg) {
-    wam.async(this.onMessage, [this, msg]);
-  }.bind(this);
-
-  var thisOnDisconnect = function() {
-    console.log('wam.transport.ChromePort: disconnect: ' + id);
-
-    this.port_.onMessage.removeListener(thisOnMessage);
-    this.port_.onMessage.removeListener(thisOnDisconnect);
-    this.port_ = null;
-    if (this.readyBinding.isOpen) {
-      this.readyBinding.closeError('wam.Error.TransportDisconnect',
-                                   ['Transport disconnect.']);
-    }
-  }.bind(this);
-
-  this.port_.onMessage.addListener(thisOnMessage);
-  this.port_.onDisconnect.addListener(thisOnDisconnect);
-};
-
-wam.transport.ChromePort.prototype.send = function(value, opt_onSend) {
-  this.port_.postMessage(value);
-  if (opt_onSend)
-    wam.async(opt_onSend);
-};
-
-wam.transport.ChromePort.prototype.accept = function(port) {
-  this.readyBinding.assertReadyState('WAIT');
-  this.setPort_(port);
-  this.send('accepted');
-  this.readyBinding.ready();
-  console.log('wam.transport.ChromePort: accept: ' + port.sender.id);
-};
-
-wam.transport.ChromePort.prototype.reconnect = function() {
-  if (!this.extensionId_)
-    throw new Error('Cannot reconnect.');
-
-  this.readyBinding.reset();
-  this.connect(this.extensionId_);
-};
-
-wam.transport.ChromePort.prototype.connect = function(extensionId) {
-  this.readyBinding.assertReadyState('WAIT');
-  this.extensionId_ = extensionId;
-
-  var port = chrome.runtime.connect(
-      extensionId, {name: 'x.wam.transport.ChromePort/1.0'});
-
-  if (!port) {
-    this.readyBinding.closeError('wam.Error.TransportDisconnect',
-                                 ['Transport creation failed.']);
-    return;
-  }
-
-  var onDisconnect = function(e) {
-    console.log('wam.transport.ChromePort.connect: disconnect');
-    port.onMessage.removeListener(onMessage);
-    port.onDisconnect.removeListener(onDisconnect);
-    this.readyBinding.closeError('wam.Error.TransportDisconnect',
-                                 ['Transport disconnected before accept.']);
-  }.bind(this);
-
-  var onMessage = function(msg) {
-    port.onMessage.removeListener(onMessage);
-    port.onDisconnect.removeListener(onDisconnect);
-
-    if (msg != 'accepted') {
-      port.disconnect();
-      this.readyBinding.closeError('wam.Error.TransportDisconnect',
-                                   ['Bad transport handshake.']);
-      return;
-    }
-
-    this.setPort_(port);
-    this.readyBinding.ready();
-  }.bind(this);
-
-  port.onDisconnect.addListener(onDisconnect);
-  port.onMessage.addListener(onMessage);
-};
-
-/**
- * The 'onConnect' function passed to listen.
- *
- * We invoke this whenever we hear a connection from port with the proper name.
- */
-wam.transport.ChromePort.onConnectCallback_ = null;
-
-wam.transport.ChromePort.prototype.onReadyBindingClose_ = function() {
-  if (this.port_)
-    this.port_.disconnect();
-};
-
-/**
- * Invoked when an foreign extension attempts to connect while we're listening.
- */
-wam.transport.ChromePort.onConnectExternal_ = function(port) {
-  var whitelist = wam.transport.ChromePort.connectWhitelist_
-  if (whitelist && whitelist.indexOf(port.sender.id) == -1) {
-    console.log('wam.transport.ChromePort: reject: ' +
-                'Sender is not on the whitelist: ' + port.sender.id);
-    port.disconnect();
-    return;
-  }
-
-  if (port.name != 'x.wam.transport.ChromePort/1.0') {
-    console.log('wam.transport.ChromePort: ' +
-                'reject: Ignoring unknown connection: ' + port.name);
-    port.disconnect();
-    return;
-  }
-
-  var transport = new wam.transport.ChromePort();
-  transport.accept(port);
-  wam.transport.ChromePort.onListenCallback_(transport);
-};
-
-/**
- * Start listening for connections from foreign extensions.
- *
- * @param {Array<string>} whitelist A whitelist of extension ids that may
- *   connect.  Pass null to disable the whitelist and allow all connections.
- * @param {function(wam.transport.ChromePort)} onConnect A callback to invoke
- *   when a new connection is made.
- */
-wam.transport.ChromePort.listen = function(whitelist, onConnect) {
-  if (onConnect == null) {
-    if (!wam.transport.ChromePort.onConnectCallback_)
-      throw new Error('wam.transport.ChromePort is not listening.');
-
-    console.log('wam.transport.ChromePort.connect: listen cancelled');
-
-    wam.transport.ChromePort.onListenCallback_ = null;
-    wam.transport.ChromePort.connectWhitelist_ = null;
-    chrome.runtime.onConnectExternal.removeListener(
-        wam.transport.ChromePort.onConnectExternal_);
-
-  } else {
-    if (wam.transport.ChromePort.onConnectCallback_)
-      throw new Error('wam.transport.ChromePort is already listening.');
-
-    console.log('wam.transport.ChromePort.connect: listen');
-
-    wam.transport.ChromePort.onListenCallback_ = onConnect;
-    wam.transport.ChromePort.connectWhitelist_ = whitelist;
-    chrome.runtime.onConnectExternal.addListener(
-        wam.transport.ChromePort.onConnectExternal_);
-  }
-};
-// SOURCE FILE: wam/js/wam_transport_direct.js
-// Copyright (c) 2012 The Chromium OS Authors. All rights reserved.
-// Use of this source code is governed by a BSD-style license that can be
-// found in the LICENSE file.
-
-'use strict';
-
-wam.transport.Direct = function(name) {
-  /**
-   * An arbitrary name for this transport used for debugging.
-   */
-  this.name = name;
-
-  this.readyBinding = new wam.binding.Ready();
-  this.readyBinding.onClose.addListener(this.onReadyBindingClose_, this);
-
-  /**
-   * Subscribe to this event to peek at inbound messages.
-   */
-  this.onMessage = new wam.Event(function(msg) {
-      if (this.verbose)
-        console.log(this.name + ' got: ' + JSON.stringify(msg));
-    }.bind(this));
-
-  this.isConnected_ = false;
-  this.remoteEnd_ = null;
-
-  this.queue_ = [];
-  this.boundServiceMethod_ = this.service_.bind(this);
-  this.servicePromise_ = new Promise(function(resolve) { resolve() });
-};
-
-wam.transport.Direct.createPair = function(opt_namePrefix) {
-  var prefix = opt_namePrefix ? (opt_namePrefix + '-') : '';
-  var a = new wam.transport.Direct(prefix + 'a');
-  var b = new wam.transport.Direct(prefix + 'b');
-
-  a.remoteEnd_= b;
-  b.remoteEnd_ = a;
-
-  a.readyBinding.onClose.addListener(function() {
-      setTimeout(function() {
-          if (b.readyBinding.isOpen)
-            b.readyBinding.closeErrorValue(null);
-        }, 0);
-    });
-
-  b.readyBinding.onClose.addListener(function() {
-      setTimeout(function() {
-          if (a.readyBinding.isOpen)
-            a.readyBinding.closeErrorValue(null);
-        }, 0);
-    });
-
-  a.reconnect();
-
-  return [a, b];
-};
-
-wam.transport.Direct.prototype.service_ = function() {
-  for (var i = 0; i < this.queue_.length; i++) {
-    var ary = this.queue_[i];
-    var method = ary[0];
-    this[method].call(this, ary[1]);
-    if (ary[2])
-      wam.async(ary[2]);
-  }
-
-  this.queue_.length = 0;
-};
-
-wam.transport.Direct.prototype.push_ = function(name, args, opt_onSend) {
-  if (!this.queue_.length) {
-    this.servicePromise_
-        .then(this.boundServiceMethod_)
-        .catch(function(ex) {
-            if ('message' in ex && 'stack' in ex) {
-              console.warn(ex.message, ex.stack);
-            } else {
-              if (lib && lib.TestManager &&
-                  ex instanceof lib.TestManager.Result.TestComplete) {
-                // Tests throw this non-error when they complete, we don't want
-                // to log it.
-                return;
-              }
-
-              console.warn(ex);
-            }
-          });
-  }
-
-  this.queue_.push([name, args, opt_onSend]);
-};
-
-wam.transport.Direct.prototype.reconnect = function() {
-  this.readyBinding.reset();
-  this.isConnected_ = true;
-  this.readyBinding.ready();
-
-  this.remoteEnd_.readyBinding.reset();
-  this.remoteEnd_.isConnected_ = true;
-  this.remoteEnd_.readyBinding.ready();
-};
-
-wam.transport.Direct.prototype.disconnect = function() {
-  this.readyBinding.closeOk(null);
-};
-
-wam.transport.Direct.prototype.send = function(msg, opt_onSend) {
-  if (!this.isConnected_)
-    throw new Error('Not connected.');
-
-  this.remoteEnd_.push_('onMessage', msg, opt_onSend);
-};
-
-wam.transport.Direct.prototype.onReadyBindingClose_ = function(reason, value) {
-  if (!this.isConnected_)
-    return;
-
-  this.isConnected_ = false;
-};
-// SOURCE FILE: wam/js/wam_in_message.js
-// Copyright (c) 2014 The Chromium OS Authors. All rights reserved.
-// Use of this source code is governed by a BSD-style license that can be
-// found in the LICENSE file.
-
-'use strict';
-
-/**
- * Create a new inbound message for the given channel from the given JSON value.
- *
- * @param {wam.Channel} channel The channel that received the value.
- * @param {Object} value The value received on the channel.
- */
-wam.InMessage = function(channel, value) {
-  this.channel = channel;
-  this.name = value.name;
-  this.arg = value.arg;
-
-  if (value.subject) {
-    this.subject = value.subject;
-    this.isOpen = true;
-  }
-
-  if (value.regarding) {
-    this.regardingSubject = value.regarding || null;
-    this.regardingMessage = channel.getOpenOutMessage(value.regarding);
-  }
-
-  this.isFinalReply = !!(value.name == 'ok' || value.name == 'error');
-
-  /**
-   * True if this message did not actually arrive on the transport.  Indicates
-   * it was created locally because we can't on the remote end to send some
-   * required final reply.
-   */
-  this.isSynthetic = false;
-
-  /**
-   * Invoked when we send any reply to this message.
-   */
-  this.onReply = new wam.Event();
-
-  /**
-   * Invoked when we send our final reply to this message.
-   */
-  this.onClose = new wam.Event(this.onClose_.bind(this));
-};
-
-/**
- * Create a wam.OutMessage which is a reply to this message.
- *
- * @param {string} name  The name of the message to reply with.
- * @param {*} arg  The message arg for the reply.
- * @param {function(wam.InMessage)} opt_onReply  The callback to invoke
- *     with message replies.
- */
-wam.InMessage.prototype.createReply = function(name, arg) {
-  if (!this.isOpen)
-    throw new Error('Attempt to reply to closed message.');
-
-  return new wam.OutMessage(this.channel, name, arg, this);
-};
-
-/**
- * Send a reply to this message.
- *
- * If you're expecting a reply to this message you *must* provide a callback
- * function to opt_onReply, otherwise the reply will not get a 'subject' and
- * will not be eligible for replies.
- *
- * After replying you may attach *additional* reply handlers to the onReply
- * event of the returned wam.OutMessage.
- *
- * @param {string} name  The name of the message to reply with.
- * @param {*} arg  The message arg for the reply.
- * @param {function(wam.InMessage)} opt_onReply  The callback to invoke
- *     with message replies.
- */
-wam.InMessage.prototype.reply = function(name, arg, opt_onReply) {
-  var outMessage = this.createReply(name, arg);
-  if (opt_onReply)
-    outMessage.onReply.addListener(opt_onReply);
-
-  outMessage.send();
-  return outMessage;
-};
-
-/**
- * Reply with a final 'ok' message.
- */
-wam.InMessage.prototype.replyOk = function(arg, opt_onReply) {
-  return this.reply('ok', arg, opt_onReply);
-};
-
-/**
- * Reply with a final 'error' message.
- */
-wam.InMessage.prototype.replyError = function(
-    errorName, argList, opt_onReply) {
-  var errorValue = wam.errorManager.createValue(errorName, argList);
-  return this.reply('error', errorValue, opt_onReply);
-};
-
-/**
- * Reply with a final 'error' message.
- */
-wam.InMessage.prototype.replyErrorValue = function(
-    errorValue, opt_onReply) {
-  return this.reply('error', errorValue, opt_onReply);
-};
-
-/**
- * Internal bookeeping needed when the message is closed.
- */
-wam.InMessage.prototype.onClose_ = function() {
-  if (!this.subject)
-    console.warn('Closed inbound message without a subject.');
-
-  if (this.isOpen) {
-    this.isOpen = false;
-  } else {
-    console.warn('Inbound message closed more than once.');
-  }
-};
-
-/**
- * Try to route a message to one of the provided event handlers.
- *
- * The handlers object should be keyed by message name.
- *
- * If the message name is not handled and the message requires a reply we
- * close the reply with an error and return false.  If the message does not
- * require a reply, we just return false.
- *
- * If you want to handle your own unknown messages, include a handler for
- * '__unknown__'.
- *
- * @param {Object} obj The `this` object to use when calling the message
- *     handlers.
- * @param {Object} handlers A map of message-name -> handler function.
- */
-wam.InMessage.prototype.dispatch = function(obj, handlers, opt_args) {
-  var name = this.name;
-
-  if (!handlers.hasOwnProperty(this.name)) {
-    if (this.name == 'ok' || this.name == 'error')
-      return true;
-
-    if (handlers.hasOwnProperty('__unknown__')) {
-      name = '__unknown__';
-    } else {
-      console.log('Unknown Message: ' + name);
-      if (this.isOpen)
-        this.replyError('wam.Error.UnknownMessage', [name]);
-
-      return false;
-    }
-  }
-
-  if (opt_args) {
-    opt_args.push(this)
-    handlers[name].apply(obj, opt_args);
-  } else {
-    handlers[name].call(obj, this);
-  }
-  return true;
-};
-// SOURCE FILE: wam/js/wam_out_message.js
-// Copyright (c) 2013 The Chromium OS Authors. All rights reserved.
-// Use of this source code is governed by a BSD-style license that can be
-// found in the LICENSE file.
-
-'use strict';
-
-/**
- * Create a new outbound message for the given channel.
- *
- * @param {wam.Channel} channel The channel that received the value.
- * @param {Object} value The value received on the channel.
- */
-wam.OutMessage = function(channel, name, arg, opt_regardingMessage) {
-  if (!(channel instanceof wam.Channel))
-    throw new Error('Invalid channel');
-
-  this.channel = channel;
-  this.name = name;
-  this.arg = arg;
-  this.subject = null;
-
-  if (opt_regardingMessage) {
-    this.regardingMessage = opt_regardingMessage;
-    this.regardingSubject = opt_regardingMessage.subject;
-  }
-
-  /**
-   * True if this is the final reply we're going to send.
-   */
-  this.isFinalReply = (name == 'ok' || name == 'error');
-
-  /**
-   * True if we're expecting replies.
-   */
-  this.isOpen = false;
-
-  /**
-   * Invoked when we receive a reply to this message.
-   */
-  this.onReply = new wam.Event();
-
-  /**
-   * Invoked when this message is actually sent over the wire.
-   */
-  this.onSend = new wam.Event();
-
-  /**
-   * Invoked when the message has received its last reply.
-   */
-  this.onClose = new wam.Event(this.onClose_.bind(this));
-};
-
-/**
- * Convert this object into a plain JS Object ready to send over a transport.
- */
-wam.OutMessage.prototype.toValue = function() {
-  var value = {
-    'name': this.name,
-    'arg': this.arg,
-  };
-
-  if (this.subject)
-    value['subject'] = this.subject;
-
-  if (this.regardingSubject)
-    value['regarding'] = this.regardingSubject;
-
-  return value;
-};
-
-/**
- * Prepare this message for sending, then send it.
- *
- * This is the correct way to cause a message to be sent.  Do not directly
- * call wam.Channel..sendMessage, as you'll end up skipping the bookeeping
- * done by this method.
- */
-wam.OutMessage.prototype.send = function() {
-  if (this.onReply.observers.length && !this.subject) {
-    this.subject = wam.guid();
-    this.isOpen = true;
-    this.channel.registerOpenOutMessage(this);
-  }
-
-  if (this.regardingMessage && !this.regardingMessage.isOpen)
-    throw new Error('Reply to a closed message.');
-
-  if (this.isFinalReply)
-    this.regardingMessage.onClose();
-
-  if (this.regardingMessage)
-    this.regardingMessage.onReply(this);
-
-  var onSend = this.onSend.observers.length > 0 ? this.onSend : null;
-  this.channel.sendMessage(this, onSend);
-};
-
-/**
- * Internal bookeeping needed when the message is closed.
- */
-wam.OutMessage.prototype.onClose_ = function() {
-  this.isOpen = false;
-};
-// SOURCE FILE: wam/js/wam_binding_ready.js
-// Copyright (c) 2013 The Chromium OS Authors. All rights reserved.
-// Use of this source code is governed by a BSD-style license that can be
-// found in the LICENSE file.
-
-'use strict';
-
-wam.binding.Ready = function() {
-  this.readyState = wam.binding.Ready.state.WAIT;
-
-  this.isOpen = false;
-
-  this.readyValue = null;
-  this.closeReason = null;
-  this.closeValue = null;
-
-  this.onReady = new wam.Event(function(value) {
-      this.readyValue = value;
-      this.readyState = wam.binding.Ready.state.READY;
-      this.isOpen = true;
-    }.bind(this));
-
-  this.onClose = new wam.Event(function(reason, value) {
-      this.closeReason = (reason == 'ok' ? 'ok' : 'error');
-      this.closeValue = value;
-      this.isOpen = false;
-
-      if (reason == 'ok') {
-        this.readyState = wam.binding.Ready.state.CLOSED;
-      } else {
-        this.readyState = wam.binding.Ready.state.ERROR;
-      }
-    }.bind(this));
-};
-
-wam.binding.Ready.state = {
-  WAIT: 'WAIT',
-  READY: 'READY',
-  ERROR: 'ERROR',
-  CLOSED: 'CLOSED'
-};
-
-wam.binding.Ready.prototype.isReadyState = function(/* stateName , ... */) {
-  for (var i = 0; i < arguments.length; i++) {
-    var stateName = arguments[i];
-    if (!wam.binding.Ready.state.hasOwnProperty(stateName))
-      throw new Error('Unknown state: ' + stateName);
-
-    if (this.readyState == wam.binding.Ready.state[stateName])
-      return true;
-  }
-
-  return false;
-};
-
-wam.binding.Ready.prototype.assertReady = function() {
-  if (this.readyState != wam.binding.Ready.state.READY)
-    throw new Error('Invalid ready call: ' + this.readyState);
-};
-
-wam.binding.Ready.prototype.assertReadyState = function(/* stateName , ... */) {
-  if (!this.isReadyState.apply(this, arguments))
-    throw new Error('Invalid ready call: ' + this.readyState);
-};
-
-wam.binding.Ready.prototype.dependsOn = function(otherReady) {
-  otherReady.onClose.addListener(function() {
-      if (this.isReadyState('CLOSED', 'ERROR'))
-        return;
-
-      this.closeError('wam.Error.ParentClosed',
-                      [otherReady.closeReason, otherReady.closeValue]);
-    }.bind(this));
-};
-
-wam.binding.Ready.prototype.reset = function() {
-  this.assertReadyState('WAIT', 'CLOSED', 'ERROR');
-  this.readyState = wam.binding.Ready.state['WAIT'];
-};
-
-wam.binding.Ready.prototype.ready = function(value) {
-  this.assertReadyState('WAIT');
-  this.onReady(value);
-};
-
-wam.binding.Ready.prototype.closeOk = function(value) {
-  this.assertReadyState('READY');
-  this.onClose('ok', value);
-};
-
-wam.binding.Ready.prototype.closeErrorValue = function(value) {
-  this.assertReadyState('READY', 'WAIT');
-  this.onClose('error', value);
-};
-
-wam.binding.Ready.prototype.closeError = function(name, arg) {
-  this.closeErrorValue(wam.mkerr(name, arg));
-};
-// SOURCE FILE: wam/js/wam_binding_fs.js
-// Copyright (c) 2014 The Chromium OS Authors. All rights reserved.
-// Use of this source code is governed by a BSD-style license that can be
-// found in the LICENSE file.
-
-'use strict';
-
-/**
- * Namespace for bindings related to wam.FileSystem.
- */
-wam.binding.fs = {};
-
-wam.errorManager.defineErrors
-(
- ['wam.FileSystem.Error.BadOrMissingArgument', ['name', 'expected']],
- ['wam.FileSystem.Error.BeginningOfFile', []],
- ['wam.FileSystem.Error.EndOfFile', []],
- ['wam.FileSystem.Error.UnexpectedArgvType', ['expected']],
- ['wam.FileSystem.Error.Interrupt', []],
- ['wam.FileSystem.Error.InvalidPath', ['path']],
- ['wam.FileSystem.Error.NotFound', ['path']],
- ['wam.FileSystem.Error.NotExecutable', ['path']],
- ['wam.FileSystem.Error.NotListable', ['path']],
- ['wam.FileSystem.Error.NotOpenable', ['path']],
- ['wam.FileSystem.Error.OperationTimedOut', []],
- ['wam.FileSystem.Error.OperationNotSupported', []],
- ['wam.FileSystem.Error.PathExists', ['path']],
- ['wam.FileSystem.Error.PermissionDenied', []],
- ['wam.FileSystem.Error.ReadError', ['diagnostic']],
- ['wam.FileSystem.Error.ReadyTimeout', []],
- ['wam.FileSystem.Error.ResultTooLarge', ['maxSize', 'resultSize']],
- ['wam.FileSystem.Error.RuntimeError', ['diagnostic']]
-);
-
-wam.binding.fs.baseName = function(path) {
-  var lastSlash = path.lastIndexOf('/');
-  return path.substr(lastSlash + 1);
-};
-
-wam.binding.fs.dirName = function(path) {
-  var lastSlash = path.lastIndexOf('/');
-  return path.substr(0, lastSlash);
-};
-
-wam.binding.fs.absPath = function(pwd, path) {
-  if (path.substr(0, 1) != '/')
-    path = pwd + path;
-
-  return '/' + wam.binding.fs.normalizePath(path);
-};
-
-wam.binding.fs.normalizePath = function(path) {
-  return wam.binding.fs.splitPath(path).join('/');
-};
-
-wam.binding.fs.splitPath = function(path) {
-  var rv = [];
-  var ary = path.split(/\//g);
-  for (var i = 0; i < ary.length; i++) {
-    if (!ary[i] || ary[i] == '.')
-      continue;
-
-    if (ary[i] == '..') {
-      rv.pop();
-    } else {
-      rv.push(ary[i]);
-    }
-  }
-
-  return rv;
-};
-// SOURCE FILE: wam/js/wam_binding_fs_file_system.js
-// Copyright (c) 2014 The Chromium OS Authors. All rights reserved.
-// Use of this source code is governed by a BSD-style license that can be
-// found in the LICENSE file.
-
-'use strict';
-
-/**
- * A binding that represents a wam file system.
- *
- * This is the idealized interface to all wam file systems.  Specific
- * implementations bind with this by subscribing to events.
- */
-wam.binding.fs.FileSystem = function() {
-  // We're a subclass of a ready binding.  This file system is not usable
-  // until the readyStatus becomes 'ready'.  If the readStatus is closed,
-  // the file system is no longer valid.
-  wam.binding.Ready.call(this);
-
-  /**
-   * A client is trying to stat a file.
-   */
-  this.onStat = new wam.Event();
-
-  /**
-   * A client is trying to unlink a file.
-   */
-  this.onUnlink = new wam.Event();
-
-  /**
-   * A client is trying to list the contents of a directory.
-   */
-  this.onList = new wam.Event();
-
-  /**
-   * A client is trying create an execute context.
-   */
-  this.onExecuteContextCreated = new wam.Event();
-
-  /**
-   * A client is trying to create an open context.
-   */
-  this.onOpenContextCreated = new wam.Event();
-};
-
-wam.binding.fs.FileSystem.prototype = Object.create(
-    wam.binding.Ready.prototype);
-
-/**
- * Stat a file.
- */
-wam.binding.fs.FileSystem.prototype.stat = function(arg, onSuccess, onError) {
-  this.assertReady();
-  this.onStat({path: arg.path}, onSuccess, onError);
-};
-
-/**
- * Unlink a file.
- */
-wam.binding.fs.FileSystem.prototype.unlink = function(arg, onSuccess, onError) {
-  this.assertReady();
-  this.onUnlink({path: arg.path}, onSuccess, onError);
-};
-
-/**
- * List the contents of a directory.
- */
-wam.binding.fs.FileSystem.prototype.list = function(arg, onSuccess, onError) {
-  this.assertReady();
-  this.onList({path: arg.path}, onSuccess, onError);
-};
-
-/**
- * Create an execute context associated with this file system.
- */
-wam.binding.fs.FileSystem.prototype.createExecuteContext = function() {
-  this.assertReady();
-  var executeContext = new wam.binding.fs.ExecuteContext(this);
-  executeContext.dependsOn(this);
-  this.onExecuteContextCreated(executeContext);
-  return executeContext;
-};
-
-/**
- * Create an open context associated with this file system.
- */
-wam.binding.fs.FileSystem.prototype.createOpenContext = function() {
-  this.assertReady();
-  var openContext = new wam.binding.fs.OpenContext(this);
-  openContext.dependsOn(this);
-  this.onOpenContextCreated(openContext);
-  return openContext;
-};
-
-/**
- * Copy a single file using the readFile/writeFile methods of this class.
- *
- *
- */
-wam.binding.fs.FileSystem.prototype.copyFile = function(
-    sourcePath, targetPath, onSuccess, onError) {
-  this.readFile(
-      sourcePath, {}, {},
-      function(result) {
-        this.writeFile(
-            targetPath,
-            {mode: {create: true, truncate: true}},
-            {dataType: result.dataType, data: result.data},
-            onSuccess,
-            onError);
-      }.bind(this),
-      onError);
-};
-
-/**
- * Read the entire contents of a file.
- *
- * This is a utility method that creates an OpenContext, uses the read
- * method to read in the entire file (by default) and then discards the
- * open context.
- *
- * By default this will return the data in the dataType preferred by the
- * file.  You can request a specific dataType by including it in readArg.
- *
- * @param {string} path The path to read.
- * @param {Object} openArg Additional arguments to pass to the
- *   OpenContext..open() call.
- * @param {Object} readArg Additional arguments to pass to the
- *   OpenContext..read() call.
- * @param {function(Object)} onSuccess The function to invoke with the read
- *   results.  Object will have dataType and data properties as specified
- *   by OpenContext..read().
- * @param {function(Object)} onError The function to invoke if the open
- *   or read fail.  Object will be a wam error value.
- *
- * @return {wam.binding.fs.OpenContext} The new OpenContext instance.  You
- *   can attach your own listeners to this if you need to.
- */
-wam.binding.fs.FileSystem.prototype.readFile = function(
-    path, openArg, readArg, onSuccess, onError) {
-  var ocx = this.createOpenContext();
-
-  ocx.onClose.addListener(function(value) {
-      if (!ocx.readyValue)
-        onError(ocx.closeValue);
-    });
-
-  ocx.onReady.addListener(function() {
-      ocx.read(
-          readArg,
-          function(result) {
-            ocx.closeOk(null);
-            onSuccess(result);
-          },
-          function(value) {
-            ocx.closeOk(null);
-            onError(value);
-          });
-    });
-
-  ocx.open(path, openArg);
-  return ocx;
-};
-
-/**
- * Write the entire contents of a file.
- *
- * This is a utility method that creates an OpenContext, uses the write
- * method to write the entire file (by default) and then discards the
- * open context.
- *
- * @param {string} path The path to read.
- * @param {Object} openArg Additional arguments to pass to the
- *   OpenContext..open() call.
- * @param {Object} writeArg Additional arguments to pass to the
- *   OpenContext..write() call.
- * @param {function(Object)} onSuccess The function to invoke if the write
- *   succeeds.  Object will have dataType and data properties as specified
- *   by OpenContext..read().
- * @param {function(Object)} onError The function to invoke if the open
- *   or read fail.  Object will be a wam error value.
- *
- * @return {wam.binding.fs.OpenContext} The new OpenContext instance.  You
- *   can attach your own listeners to this if you need to.
- */
-wam.binding.fs.FileSystem.prototype.writeFile = function(
-    path, openArg, writeArg, onSuccess, onError) {
-  var ocx = this.createOpenContext();
-
-  ocx.onClose.addListener(function(value) {
-      if (!ocx.readyValue)
-        onError(ocx.closeValue);
-    });
-
-  ocx.onReady.addListener(function() {
-      ocx.write(
-          writeArg,
-          function(result) {
-            ocx.closeOk(null);
-            onSuccess(result);
-          },
-          function(value) {
-            ocx.closeOk(null);
-            onError(value);
-          });
-    });
-
-  if (!openArg)
-    openArg = {};
-
-  if (!openArg.mode)
-    openArg.mode = {};
-
-  openArg.mode.write = true;
-
-  ocx.open(path, openArg);
-  return ocx;
-};
-// SOURCE FILE: wam/js/wam_binding_fs_execute_context.js
-// Copyright (c) 2014 The Chromium OS Authors. All rights reserved.
-// Use of this source code is governed by a BSD-style license that can be
-// found in the LICENSE file.
-
-'use strict';
-
-/**
- * A binding that represents a running executable on a wam.binding.fs.
- * FileSystem.
- *
- * You should only create an ExecuteContext by calling an instance of
- * wam.binding.fs.FileSystem..createExecuteContext().
- *
- * @param {wam.binding.fs.FileSystem} The parent file system.
- */
-wam.binding.fs.ExecuteContext = function(fileSystem) {
-  // We're a 'subclass' of wam.binding.Ready.
-  wam.binding.Ready.call(this);
-
-  /**
-   * Parent file system.
-   */
-  this.fileSystem = fileSystem;
-
-  // If the parent file system is closed, we close too.
-  this.dependsOn(this.fileSystem);
-
-  /**
-   * The wam.binding.fs.ExecuteContext we're currently calling out to, if any.
-   *
-   * See ..setCallee().
-   */
-  this.callee = null;
-
-  /**
-   * Called by the execute() method of this instance.
-   */
-  this.onExecute = new wam.Event(function() {
-      this.didExecute_ = true;
-    }.bind(this));
-
-  /**
-   * Events sourced by this binding in addition to the inherited events from
-   * wam.binding.Ready.
-   *
-   * These are raised after the corresponding method is invoked.  For example,
-   * wam.binding.fs.signal(...) raises the onSignal event.
-   */
-  this.onSignal = new wam.Event();
-  this.onStdOut = new wam.Event();
-  this.onStdErr = new wam.Event();
-  this.onStdIn = new wam.Event();
-  this.onTTYChange = new wam.Event();
-  this.onTTYRequest = new wam.Event();
-
-  // An indication that the execute() method was called.
-  this.didExecute_ = false;
-
-  /**
-   * The path provided to the execute() method of this ExecuteContext.
-   */
-  this.path = null;
-  /**
-   * The arg provided to the execute() method of this ExecuteContext.
-   */
-  this.arg = null;
-
-  // The environtment variables for this execute context.
-  this.env_ = {};
-
-  // The tty state for this execute context.
-  this.tty_ = {
-    isatty: false,
-    rows: 0,
-    columns: 0,
-    interrupt: String.fromCharCode('C'.charCodeAt(0) - 64)  // ^C
-  };
-};
-
-wam.binding.fs.ExecuteContext.prototype = Object.create(
-    wam.binding.Ready.prototype);
-
-/**
- * Set the given ExecuteContext as the callee for this instance.
- *
- * When calling another executable, incoming calls and outbound events are
- * wired up to the caller as appropriate.  This instance will not receive
- * the stdio-like events while a call is in progress.  The onSignal event,
- * however, is delivered to this instance even when a call is in progress.
- *
- * If the callee is closed, events are rerouted back to this instance and the
- * callee instance property is set to null.
- */
-wam.binding.fs.ExecuteContext.prototype.setCallee = function(executeContext) {
-  if (this.callee)
-    throw new Error('Still waiting for call:', this.callee);
-
-  this.callee = executeContext;
-  var previousInterruptChar = this.tty_.interrupt;
-
-  var onClose = function() {
-    this.callee.onClose.removeListener(onClose);
-    this.callee.onStdOut.removeListener(this.onStdOut);
-    this.callee.onStdOut.removeListener(this.onStdErr);
-    this.callee.onTTYRequest.removeListener(this.onTTYRequest);
-    this.callee = null;
-
-    if (this.tty_.interrupt != previousInterruptChar)
-      this.requestTTY({interrupt: previousInterruptChar});
-  }.bind(this);
-
-  this.callee.onClose.addListener(onClose);
-  this.callee.onStdOut.addListener(this.onStdOut);
-  this.callee.onStdErr.addListener(this.onStdErr);
-  this.callee.onTTYRequest.addListener(this.onTTYRequest);
-  this.callee.setEnvs(this.env_);
-  this.callee.setTTY(this.tty_);
-};
-
-/**
- * Utility method to construct a new ExecuteContext, set it as the callee, and
- * execute it with the given path and arg.
- */
-wam.binding.fs.ExecuteContext.prototype.call = function(path, arg) {
-  this.setCallee(this.fileSystem.createExecuteContext());
-  this.callee.execute(path, arg);
-  return this.callee;
-};
-
-/**
- * Return a copy of the internal tty state.
- */
-wam.binding.fs.ExecuteContext.prototype.getTTY = function() {
-  var rv = {};
-  for (var key in this.tty_) {
-    rv[key] = this.tty_[key];
-  }
-
-  return rv;
-};
-
-/**
- * Set the authoritative state of the tty.
- *
- * This should only be invoked in the direction of tty->executable.  Calls in
- * the reverse direction will only affect this instance and those derived (via
- * setCallee) from it, and will be overwritten the next time the authoritative
- * state changes.
- *
- * Executables should use requestTTY to request changes to the authoritative
- * state.
- *
- * The tty state is an object with the following properties:
- *
- *   tty {
- *     isatty: boolean, True if stdio-like methods are attached to a visual
- *       terminal.
- *     rows: integer, The number of rows in the tty.
- *     columns: integer, The number of columns in the tty.
- *     interrupt: string, The key used to raise an
- *       'wam.FileSystem.Error.Interrupt' signal.
- *   }
- *
- * @param {Object} tty An object containing one or more of the properties
- *   described above.
- */
-wam.binding.fs.ExecuteContext.prototype.setTTY = function(tty) {
-  this.assertReadyState('WAIT', 'READY');
-
-  if ('isatty' in tty)
-    this.tty_.isatty = !!tty.isatty;
-  if ('rows' in tty)
-    this.tty_.rows = tty.rows;
-  if ('columns' in tty)
-    this.tty_.columns = tty.columns;
-
-  if (!this.tty_.rows || !this.tty_.columns) {
-    this.tty_.rows = 0;
-    this.tty_.columns = 0;
-    this.tty_.isatty = false;
-  } else {
-    this.tty_.isatty = true;
-  }
-
-  if (tty.rows < 0 || tty.columns < 0)
-    throw new Error('Invalid tty size.');
-
-  if ('interrupt' in tty)
-    this.tty_.interrupt = tty.interrupt;
-
-  this.onTTYChange(this.tty_);
-
-  if (this.callee)
-    this.callee.setTTY(tty);
-};
-
-/**
- * Request a change to the controlling tty.
- *
- * At the moment only the 'interrupt' property can be changed.
- *
- * @param {Object} tty An object containing a changeable property of the
- *  tty.
- */
-wam.binding.fs.ExecuteContext.prototype.requestTTY = function(tty) {
-  this.assertReadyState('READY');
-
-  if (typeof tty.interrupt == 'string')
-    this.onTTYRequest({interrupt: tty.interrupt});
-};
-
-/**
- * Get a copy of the current environment variables.
- */
-wam.binding.fs.ExecuteContext.prototype.getEnvs = function() {
-  var rv = {};
-  for (var key in this.env_) {
-    rv[key] = this.env_[key];
-  }
-
-  return rv;
-};
-
-/**
- * Get the value of the given environment variable, or the provided
- * defaultValue if it is not set.
- *
- * @param {string} name
- * @param {*} defaultValue
- */
-wam.binding.fs.ExecuteContext.prototype.getEnv = function(name, defaultValue) {
-  if (this.env_.hasOwnProperty(name))
-    return this.env_[name];
-
-  return defaultValue;
-};
-
-/**
- * Overwrite the current environment.
- *
- * @param {Object} env
- */
-wam.binding.fs.ExecuteContext.prototype.setEnvs = function(env) {
-  this.assertReadyState('WAIT', 'READY');
-  for (var key in env) {
-    this.env_[key] = env[key];
-  }
-};
-
-/**
- * Set the given environment variable.
- *
- * @param {string} name
- * @param {*} value
- */
-wam.binding.fs.ExecuteContext.prototype.setEnv = function(name, value) {
-  this.assertReadyState('WAIT', 'READY');
-  this.env_[name] = value;
-};
-
-/**
- * Create a new open context using the wam.binding.fs.FileSystem for this
- * execute context, bound to the lifetime of this context.
- */
-wam.binding.fs.ExecuteContext.prototype.createOpenContext = function() {
-  var ocx = this.fileSystem.createOpenContext();
-  ocx.dependsOn(this);
-  return ocx;
-};
-
-/**
- * Same as wam.binding.fs.copyFile, except bound to the lifetime of this
- * ExecuteContext.
- */
-wam.binding.fs.ExecuteContext.prototype.copyFile = function(
-    sourcePath, targetPath, onSuccess, onError) {
-  this.readFile(
-      sourcePath, {}, {},
-      function(result) {
-        this.writeFile(
-            targetPath,
-            {mode: {create: true, truncate: true}},
-            {dataType: result.dataType, data: result.data},
-            onSuccess,
-            onError);
-      }.bind(this),
-      onError);
-};
-
-/**
- * Same as wam.binding.fs.readFile, except bound to the lifetime of this
- * ExecuteContext.
- */
-wam.binding.fs.ExecuteContext.prototype.readFile = function(
-    path, openArg, readArg, onSuccess, onError) {
-  var ocx = this.fileSystem.readFile(
-      path, openArg, readArg, onSuccess, onError);
-  ocx.dependsOn(this);
-  return ocx;
-};
-
-/**
- * Same as wam.binding.fs.writeFile, except bound to the lifetime of this
- * ExecuteContext.
- */
-wam.binding.fs.ExecuteContext.prototype.writeFile = function(
-    path, openArg, writeArg, onSuccess, onError) {
-  var ocx = this.fileSystem.writeFile(
-      path, openArg, writeArg, onSuccess, onError);
-  ocx.dependsOn(this);
-  return ocx;
-};
-
-/**
- * Attempt to execute the given path with the given argument.
- *
- * This can only be called once per OpenContext instance.
- *
- * This function attempts to execute a path.  If the execute succeeds, the
- * onReady event of this binding will fire and you're free to start
- * communicating with the target process.
- *
- * When you're finished, call closeOk, closeError, or closeErrorValue to clean
- * up the execution context.
- *
- * If the execute fails the context will be close with an 'error' reason.
- *
- * The onClose event of this binding will fire when the context is closed,
- * regardless of which side of the context initiated the close.
- *
- * @param {string} The path to execute.
- * @param {*} The arg to pass to the executable.
- */
-wam.binding.fs.ExecuteContext.prototype.execute = function(path, arg) {
-  this.assertReadyState('WAIT');
-
-  if (this.didExecute_)
-    throw new Error('Already executed on this context');
-
-  this.path = path;
-  this.arg = arg;
-
-  this.onExecute();
-};
-
-/**
- * Send a signal to the running executable.
- *
- * The only signal defined at this time has the name 'wam.FileSystem.Signal.
- * Interrupt' and a null value.
- *
- * @param {name}
- * @param {value}
- */
-wam.binding.fs.ExecuteContext.prototype.signal = function(name, value) {
-  this.assertReady();
-  if (this.callee) {
-    this.callee.closeError('wam.FileSystem.Error.Interrupt', []);
-  } else {
-    this.onSignal(name, value);
-  }
-};
-
-/**
- * Send stdout from this executable.
- *
- * This is not restricted to string values.  Recipients should filter out
- * non-string values in their onStdOut handler if necessary.
- *
- * TODO(rginda): Add numeric argument onAck to support partial consumption.
- *
- * @param {*} value The value to send.
- * @param {function()} opt_onAck The optional function to invoke when the
- *   recipient acknowledges receipt.
- */
-wam.binding.fs.ExecuteContext.prototype.stdout = function(value, opt_onAck) {
-  if (!this.isReadyState('READY')) {
-    console.warn('Dropping stdout to closed execute context:', value);
-    return;
-  }
-
-  this.onStdOut(value, opt_onAck);
-};
-
-/**
- * Send stderr from this executable.
- *
- * This is not restricted to string values.  Recipients should filter out
- * non-string values in their onStdErr handler if necessary.
- *
- * TODO(rginda): Add numeric argument onAck to support partial consumption.
- *
- * @param {*} value The value to send.
- * @param {function()} opt_onAck The optional function to invoke when the
- *   recipient acknowledges receipt.
- */
-wam.binding.fs.ExecuteContext.prototype.stderr = function(value, opt_onAck) {
-  if (!this.isReadyState('READY')) {
-    console.warn('Dropping stderr to closed execute context:', value);
-    return;
-  }
-
-  this.onStdErr(value, opt_onAck);
-};
-
-/**
- * Send stdout to this executable.
- *
- * This is not restricted to string values.  Recipients should filter out
- * non-string values in their onStdIn handler if necessary.
- *
- * TODO(rginda): Add opt_onAck.
- *
- * @param {*} value The value to send.
- */
-wam.binding.fs.ExecuteContext.prototype.stdin = function(value) {
-  this.assertReady();
-  if (this.callee) {
-    this.callee.stdin(value);
-  } else {
-    this.onStdIn(value);
-  }
-};
-// SOURCE FILE: wam/js/wam_binding_fs_open_context.js
-// Copyright (c) 2014 The Chromium OS Authors. All rights reserved.
-// Use of this source code is governed by a BSD-style license that can be
-// found in the LICENSE file.
-
-'use strict';
-
-/**
- * A binding that represents an open file on a wam.binding.fs.FileSystem.
- *
- * You should only create an OpenContext by calling an instance of
- * wam.binding.fs.FileSystem..createOpenContext().
- *
- * @param {wam.binding.fs.FileSystem} The parent file system.
- */
-wam.binding.fs.OpenContext = function(fileSystem) {
-  // We're a 'subclass' of wam.binding.Ready.
-  wam.binding.Ready.call(this);
-
-  /**
-   * Parent file system.
-   */
-  this.fileSystem = fileSystem;
-
-  // If the parent file system is closed, we close too.
-  this.dependsOn(this.fileSystem);
-
-  // When the open context is marked as ready is should include a wam.fs stat
-  // result for the target file.
-  this.onReady.addListener(function(value) { this.wamStat = value }.bind(this));
-
-  /**
-   * Events sourced by this binding in addition to the inherited events from
-   * wam.binding.Ready.
-   *
-   * These are raised after the corresponding method is invoked.  For example,
-   * wam.binding.fs.open(...) raises the onOpen event.
-   */
-  this.onOpen = new wam.Event(function() { this.didOpen_ = true }.bind(this));
-  this.onSeek = new wam.Event();
-  this.onRead = new wam.Event();
-  this.onWrite = new wam.Event();
-
-  // An indication that the open() method was called.
-  this.didOpen_ = false;
-
-  /**
-   * That path that this OpenContext was opened for.
-   */
-  this.path = null;
-  /**
-   * The wam stat result we received when the file was opened.
-   */
-  this.wamStat = null;
-
-  this.mode = {
-    create: false,
-    exclusive: false,
-    truncate: false,
-    read: false,
-    write: false
-  };
-};
-
-wam.binding.fs.OpenContext.prototype = Object.create(
-    wam.binding.Ready.prototype);
-
-/**
- * List of acceptable values for the 'dataType' parameter used in stat and read
- * operations.
- */
-wam.binding.fs.OpenContext.dataTypes = [
-    /**
-     * Not used in stat results.
-     *
-     * When a dataType of 'arraybuffer' is used on read and write requests, the
-     * data is expected to be an ArrayBuffer instance.
-     *
-     * NOTE(rginda): ArrayBuffer objects don't work over wam.transport.
-     * ChromePort, due to http://crbug.com/374454.
-     */
-    'arraybuffer',
-
-    /**
-     * Not used in stat results.
-     *
-     * When used in read and write requests, the data will be a base64 encoded
-     * string.  Note that decoding this value to a UTF8 string may result in
-     * invalid UTF8 sequences or data corruption.
-     */
-    'base64-string',
-
-    /**
-     * In stat results, a dataType of 'blob' means that the file contains a set
-     * of random access bytes.
-     *
-     * When a dataType of 'blob' is used on a read request, the data is expected
-     * to be an instance of an opened Blob object.
-     *
-     * NOTE(rginda): Blobs can't cross origin over wam.transport.ChromePort.
-     * Need to test over HTML5 MessageChannels.
-     */
-    'blob',
-
-    /**
-     * Not used in stat results.
-     *
-     * When used in read and write requests, the data will be a UTF-8
-     * string.  Note that if the underlying file contains sequences that cannot
-     * be encoded in UTF-8, the result may contain invalid sequences or may
-     * not match the actual contents of the file.
-     */
-    'utf8-string',
-
-    /**
-     * In stat results, a dataType of 'value' means that the file contains a
-     * single value which can be of any type.
-     *
-     * When a dataType of 'value' is used on a read request, the results of
-     * the read will be the native type stored in the file.  If the file
-     * natively stores a blob, the result will be a string.
-     */
-    'value',
-  ];
-
-/**
- * Open a file.
- *
- * This can only be called once per OpenContext instance.
- *
- * This function attempts to open a path.  If the open succeeds, the onReady
- * event of this binding will fire, and will include the wam 'stat' value
- * for the target file.  From there you can call the OpenContext seek, read,
- * and write methods to operate on the target.  When you're finished, call
- * closeOk, closeError, or closeErrorValue to clean up the context.
- *
- * If the open fails, the onClose event of this binding will fire and will
- * include a wam error value.
- *
- * The arg parameter should be an object.  The only recognized property
- * is 'mode', and may contain one or more of the following properties to
- * override the default open mode.
- *
- *   mode {
- *     create: false, True to create the file if it doesn't exist,
- *     exclusive: false, True to fail if create && file exists.
- *     truncate: false, True to empty the file after opening.
- *     read: true, True to enable read operations.
- *     write: false, True to enable write operations.
- *   }
- *
- * @param {string} path The path to open.
- * @param {Object} arg The open arguments.
- */
-wam.binding.fs.OpenContext.prototype.open = function(path, arg) {
-  this.assertReadyState('WAIT');
-
-  if (this.didOpen_)
-    throw new Error('Already opened on this context');
-
-  this.path = path;
-  if (arg && arg.mode && typeof arg.mode == 'object') {
-    this.mode.create = !!arg.mode.create;
-    this.mode.exclusive = !!arg.mode.exclusive;
-    this.mode.truncate = !!arg.mode.truncate;
-    this.mode.read = !!arg.mode.read;
-    this.mode.write = !!arg.mode.write;
-  } else {
-    this.mode.read = true;
-  }
-
-  this.onOpen();
-};
-
-/**
- * Sanity check an inbound arguments.
- *
- * @param {Object} arg The arguments object to check.
- * @param {function(wam.Error)} onError the callback to invoke if the
- *   check fails.
- *
- * @return {boolean} True if the arg object is valid, false if it failed.
- */
-wam.binding.fs.OpenContext.prototype.checkArg_ = function(arg, onError) {
-  // If there's an offset, it must be a number.
-  if ('offset' in arg && typeof arg.offset != 'number') {
-    wam.async(onError, [null, 'wam.FileSystem.Error.BadOrMissingArgument',
-                        ['offset', 'number']]);
-    return false;
-  }
-
-  // If there's a count, it must be a number.
-  if ('count' in arg && typeof arg.count != 'number') {
-    wam.async(onError, [null, 'wam.FileSystem.Error.BadOrMissingArgument',
-                        ['count', 'number']]);
-    return false;
-  }
-
-  // If there's a whence, it's got to match this regexp.
-  if ('whence' in arg && !/^(begin|current|end)$/.test(arg.whence)) {
-    wam.async(onError, [null, 'wam.FileSystem.Error.BadOrMissingArgument',
-                        ['whence', '(begin | current | end)']]);
-    return false;
-  }
-
-  // If there's a whence, there's got to be an offset.
-  if (arg.whence && !('offset' in arg)) {
-    wam.async(onError, [null, 'wam.FileSystem.Error.BadOrMissingArgument',
-                        ['offset', 'number']]);
-    return false;
-  }
-
-  // If there's an offset, there's got to be a whence.
-  if (('offset' in arg) && !arg.whence) {
-    wam.async(onError, [null, 'wam.FileSystem.Error.BadOrMissingArgument',
-                        ['whence', '(begin | current | end)']]);
-    return false;
-  }
-
-  // If there's a dataType, it's got to be valid.
-  if ('dataType' in arg &&
-      wam.binding.fs.OpenContext.dataTypes.indexOf(arg.dataType) == -1) {
-    wam.async(onError,
-              [null, 'wam.FileSystem.Error.BadOrMissingArgument',
-               ['dataType',
-                '(' + wam.binding.fs.OpenContext.dataTypes.join(' | ') + ')']]);
-    return false;
-  }
-
-  return true;
-};
-
-/**
- * Seek to a new position in the file.
- *
- * The arg object should be an object with the following properties:
- *
- *  arg {
- *    offset: 0, An integer position to seek to.
- *    whence: ('begin', 'current', 'end'), A string specifying the origin of
- *      the seek.
- *  }
- *
- * @param {Object} arg The seek arg.
- * @param {function()} onSuccess The callback to invoke if the seek succeeds.
- * @param {function(wam.Error)} onError The callback to invoke if the seek
- *   fails.
- */
-wam.binding.fs.OpenContext.prototype.seek = function(arg, onSuccess, onError) {
-  this.assertReady();
-
-  if (!this.checkArg_(arg, onError))
-    return;
-
-  this.onRead(arg, onSuccess, onError);
-};
-
-/**
- * Read from the file.
- *
- * The arg object should be an object with the following properties:
- *
- *  arg {
- *    offset: 0, An integer position to seek to before reading.
- *    whence: ('begin', 'current', 'end'), A string specifying the origin of
- *      the seek.
- *    dataType: The data type you would prefer to receive.  Mus be one of
- *      wam.binding.fs.OpenContext.dataTypes.  If the target cannot provide
- *      the requested format it should fail the read.  If you leave this
- *      unspecified the target will choose a dataType.
- *  }
- *
- * @param {Object} arg The read arg.
- * @param {function()} onSuccess The callback to invoke if the read succeeds.
- * @param {function(wam.Error)} onError The callback to invoke if the read
- *   fails.
- */
-wam.binding.fs.OpenContext.prototype.read = function(arg, onSuccess, onError) {
-  this.assertReady();
-
-  if (!this.mode.read) {
-    wam.async(onError, [null, 'wam.FileSystem.Error.OperationNotSupported',
-                        []]);
-    return;
-  }
-
-  if (!this.checkArg_(arg, onError))
-    return;
-
-  this.onRead(arg, onSuccess, onError);
-};
-
-/**
- * Write to a file.
- *
- * The arg object should be an object with the following properties:
- *
- *  arg {
- *    offset: 0, An integer position to seek to before writing.
- *    whence: ('begin', 'current', 'end'), A string specifying the origin of
- *      the seek.
- *    data: The data you want to write.
- *    dataType: The type of data you're providing.  Must be one of
- *      wam.binding.fs.OpenContext.dataTypes.  If the 'data' argument is an
- *      instance of a Blob or ArrayBuffer instance, this argument has no
- *      effect.
- *  }
- *
- * @param {Object} arg The write arg.
- * @param {function()} onSuccess The callback to invoke if the write succeeds.
- * @param {function(wam.Error)} onError The callback to invoke if the write
- *   fails.
- */
-wam.binding.fs.OpenContext.prototype.write = function(arg, onSuccess, onError) {
-  this.assertReady();
-
-  if (!this.mode.write) {
-    wam.async(onError,
-              [null, 'wam.FileSystem.Error.OperationNotSupported', []]);
-    return;
-  }
-
-  if (!this.checkArg_(arg, onError))
-    return;
-
-  this.onWrite(arg, onSuccess, onError);
-};
-// SOURCE FILE: wam/js/wam_remote_ready.js
-// Copyright (c) 2014 The Chromium OS Authors. All rights reserved.
-// Use of this source code is governed by a BSD-style license that can be
-// found in the LICENSE file.
-
-'use strict';
-
-/**
- * Request/Response classes to marshal a wam.binding.Ready over a wam channel.
- */
-wam.remote.ready = {};
-
-wam.remote.ready.Request = function(opt_readyBinding) {
-  /**
-   * The binding we'll use to communicate ready state.
-   */
-  this.readyBinding = opt_readyBinding || new wam.binding.Ready();
-  this.readyBinding.onClose.addListener(this.onReadyBindingClose_.bind(this));
-
-  /**
-   * Fired for replies to outMessage.
-   *
-   * This will not fire for the initial 'ready' message, only for the subsequent
-   * messages.
-   */
-  this.onMessage = new wam.Event();
-
-  /**
-   * The message we're sending that expects a 'ready' reply.
-   */
-  this.outMessage = null;
-
-  /**
-   * The 'ready' reply message from the remote end.
-   */
-  this.inReady = null;
-
-  /**
-   * The final message received from the remote end.
-   */
-  this.inFinal = null;
-
-  /**
-   * Messages we've sent that are still awaiting replies.
-   *
-   * If the remote end closes out this ready context, we close these out with
-   * synthetic error replies to clean up.
-   */
-  this.openOutMessages_ = {};
-};
-
-/**
- * Send the initial message that will request the 'ready' reply.
- */
-wam.remote.ready.Request.prototype.sendRequest = function(outMessage) {
-  if (this.outMessage)
-    throw new Error('Request already sent.');
-
-  this.readyBinding.dependsOn(outMessage.channel.readyBinding);
-  this.outMessage = outMessage;
-  this.outMessage.onReply.addListener(this.onOutMessageReply_.bind(this));
-  this.outMessage.send();
-};
-
-wam.remote.ready.Request.prototype.createMessage = function(name, arg) {
-  this.readyBinding.assertReady();
-  return this.inReady.createReply(name, arg);
-};
-
-/**
- * Send a message to the other end of this context.
- */
-wam.remote.ready.Request.prototype.send = function(name, arg, opt_onReply) {
-  this.readyBinding.assertReady();
-  return this.inReady.reply(name, arg, opt_onReply);
-};
-
-wam.remote.ready.Request.prototype.onReadyBindingClose_ = function(
-    reason, value) {
-  if (this.outMessage && this.outMessage.isOpen) {
-    // Upon receipt of our 'ok'/'error' reply the remote end is required to
-    // acknowledge by sending a final reply to our outMessage (unless it has
-    // already done so).  If the remotes final reply doesn't arrive within
-    // `wam.remote.closeTimeoutMs` milliseconds, we'll manually close the
-    // outMessage and log a warning.
-    if (this.outMessage.channel.readyBinding.isOpen) {
-      setTimeout(function() {
-          if (this.outMessage.isOpen) {
-            console.warn('Request: Manually closing "' +
-                         this.outMessage.name + '" message.');
-            this.outMessage.channel.injectMessage(
-                'error',
-                wam.mkerr('wam.Error.CloseTimeout', []),
-                this.outMessage.subject);
-          }
-        }.bind(this), wam.remote.closeTimeoutMs);
-    }
-  }
-
-  if (this.inReady && this.inReady.isOpen &&
-      this.inReady.channel.readyBinding.isOpen) {
-    if (reason == 'ok') {
-      this.inReady.replyOk(null);
-    } else if (this.inFinal) {
-      this.inReady.replyError('wam.Error.ReadyAbort', [this.inFinal.arg]);
-    } else {
-      this.inReady.replyErrorValue(value);
-    }
-  }
-};
-
-/**
- * Internal handler for replies to the outMessage.
- */
-wam.remote.ready.Request.prototype.onOutMessageReply_ = function(inMessage) {
-  if (this.readyBinding.isReadyState('WAIT')) {
-    if (inMessage.name == 'ready') {
-      this.inReady = inMessage;
-      this.readyBinding.ready(inMessage.arg);
-    } else {
-      if (inMessage.name == 'error') {
-        this.readyBinding.closeErrorValue(inMessage.arg);
-      } else {
-        if (this.inReady.isOpen) {
-          this.readyBinding.closeError('wam.UnexpectedMessage',
-                                       [inMessage.name, inMessage.arg]);
-        }
-      }
-    }
-  } else if (this.readyBinding.isReadyState('READY')) {
-    this.onMessage(inMessage);
-
-    if (inMessage.isFinalReply) {
-      if (inMessage.name == 'ok') {
-        this.readyBinding.closeOk(inMessage.arg);
-      } else {
-        this.readyBinding.closeErrorValue(inMessage.arg);
-      }
-    }
-  }
-};
-
-/**
- * @param {lib.wam.InMessage} inMessage The inbound message that expects a
- *     'ready' reply.
- */
-wam.remote.ready.Response = function(inMessage, opt_readyBinding) {
-  /**
-   * The inbound message that expects a 'ready' reply.
-   */
-  this.inMessage = inMessage;
-
-  this.readyBinding = opt_readyBinding || new wam.binding.Ready();
-  this.readyBinding.dependsOn(inMessage.channel.readyBinding);
-  this.readyBinding.onClose.addListener(this.onReadyBindingClose_.bind(this));
-  this.readyBinding.onReady.addListener(this.onReadyBindingReady_.bind(this));
-
-  /**
-   * Our 'ready' reply.
-   */
-  this.outReady = null;
-
-  /**
-   * The final reply to our 'ready' message, saved for posterity.
-   */
-  this.inFinal = null;
-
-  /**
-   * Fired for replies to our 'ready' message, including any final 'ok' or
-   * 'error' reply.
-   */
-  this.onMessage = new wam.Event();
-};
-
-wam.remote.ready.Response.prototype.createMessage = function(name, arg) {
-  return this.inMessage.createReply(name, arg);
-};
-
-/**
- * Send an arbitrary message to the other end of this context.
- *
- * You must call replyReady() once before sending additional messages.
- */
-wam.remote.ready.Response.prototype.send = function(name, arg, opt_onReply) {
-  this.readyBinding.assertReady();
-  return this.inMessage.reply(name, arg, opt_onReply);
-};
-
-/**
- */
-wam.remote.ready.Response.prototype.onReadyBindingReady_ = function(value) {
-  this.outReady = this.inMessage.reply('ready', value,
-                                       this.onOutReadyReply_.bind(this));
-};
-
-wam.remote.ready.Response.prototype.onReadyBindingClose_ = function(
-    reason, value) {
-  if (this.inMessage && this.inMessage.isOpen &&
-      this.inMessage.channel.readyBinding.isOpen) {
-    if (reason == 'ok') {
-      this.inMessage.replyOk(value);
-    } else if (this.inFinal) {
-      this.inMessage.replyError('wam.Error.ReadyAbort', [this.inFinal.arg]);
-    } else {
-      this.inMessage.replyErrorValue(value);
-    }
-  }
-
-  if (this.outReady && this.outReady.isOpen) {
-    if (this.outReady.channel.readyBinding.isOpen) {
-      setTimeout(function() {
-          if (this.outReady.isOpen) {
-            console.warn('Response: Manually closing "' +
-                         this.outReady.name + '" message.');
-            this.outReady.channel.injectMessage(
-                'error',
-                lib.wam.errorManager.createMessageArg(
-                    'wam.Error.CloseTimeout', []),
-                this.outReady.subject);
-          }
-        }.bind(this), wam.remote.closeTimeoutMs);
-    }
-  }
-};
-
-wam.remote.ready.Response.prototype.onOutReadyReply_ = function(inMessage) {
-  if (this.readyBinding.isReadyState('READY')) {
-    this.onMessage(inMessage);
-
-    if (inMessage.isFinalReply) {
-      this.inFinal = inMessage;
-
-      if (inMessage.name == 'ok') {
-        this.readyBinding.closeOk(inMessage.arg);
-      } else {
-        this.readyBinding.closeErrorValue(inMessage.arg);
-      }
-    }
-  }
-};
-// SOURCE FILE: wam/js/wam_remote_fs.js
-// Copyright (c) 2014 The Chromium OS Authors. All rights reserved.
-// Use of this source code is governed by a BSD-style license that can be
-// found in the LICENSE file.
-
-'use strict';
-
-wam.remote.fs = {};
-
-wam.remote.fs.protocolName = 'x.wam.FileSystem';
-
-/**
- * Check to see of the given message is a wam.FileSystem handshake offer.
- *
- * @return {boolean}
- */
-wam.remote.fs.testOffer = function(inMessage) {
-  if (!wam.changelogVersion)
-    throw new Error('Unknown changelog version');
-
-  if (!inMessage.arg.payload || typeof inMessage.arg.payload != 'object')
-    return false;
-
-  var payload = inMessage.arg.payload;
-  if (payload.protocol != wam.remote.fs.protocolName)
-    return false;
-
-  var pos = wam.changelogVersion.indexOf('.');
-  var expectedMajor = wam.changelogVersion.substr(0, pos);
-
-  pos = payload.version.indexOf('.');
-  var offeredMajor = payload.version.substr(0, pos);
-
-  return (expectedMajor == offeredMajor);
-};
-
-/**
- * Context for a wam.FileSystem handshake request.
- */
-wam.remote.fs.mount = function(channel) {
-  var handshakeRequest = new wam.remote.fs.handshake.Request(channel);
-  handshakeRequest.sendRequest();
-  return handshakeRequest.fileSystem;
-};
-// SOURCE FILE: wam/js/wam_remote_fs_handshake.js
-// Copyright (c) 2014 The Chromium OS Authors. All rights reserved.
-// Use of this source code is governed by a BSD-style license that can be
-// found in the LICENSE file.
-
-'use strict';
-
-/**
- * Request/Response classes to connect a wam.binding.fs.FileSystem over a wam
- * channel.
- */
-wam.remote.fs.handshake = {};
-
-/**
- * Back a wam.binding.fs.FileSystem binding with a wam.FileSystem handshake
- * request.
- *
- * Events sourced by the wam.binding.fs.FileSystem will become messages sent
- * regarding a wam.FileSystem handshake on the given channel.
- */
-wam.remote.fs.handshake.Request = function(channel) {
-  this.channel = channel;
-
-  this.fileSystem = new wam.binding.fs.FileSystem();
-  this.fileSystem.dependsOn(channel.readyBinding);
-
-  this.fileSystem.onStat.addListener(
-      this.proxySingleMessage_.bind(this, 'stat'));
-  this.fileSystem.onUnlink.addListener(
-      this.proxySingleMessage_.bind(this, 'unlink'));
-  this.fileSystem.onList.addListener(
-      this.proxySingleMessage_.bind(this, 'list'));
-
-  this.fileSystem.onExecuteContextCreated.addListener(
-      this.onExecuteContextCreated_.bind(this));
-  this.fileSystem.onOpenContextCreated.addListener(
-      this.onOpenContextCreated_.bind(this));
-
-  this.readyRequest = new wam.remote.ready.Request(this.fileSystem);
-};
-
-/**
- * Send the handshake offer message.
- */
-wam.remote.fs.handshake.Request.prototype.sendRequest = function() {
-  if (!wam.changelogVersion)
-    throw new Error('Unknown changelog version');
-
-  var outMessage = this.channel.createHandshakeMessage
-  ({ protocol: wam.remote.fs.protocolName,
-     version: wam.changelogVersion
-   });
-
-  this.readyRequest.sendRequest(outMessage);
-};
-
-/**
- * Proxy a wam.binding.fs.FileSystem event which maps to a single wam
- * message that expects an immediate 'ok' or 'error' reply.
- */
-wam.remote.fs.handshake.Request.prototype.proxySingleMessage_ = function(
-    name, arg, onSuccess, onError) {
-  this.readyRequest.send(name, {path: arg.path}, function(inMessage) {
-      if (inMessage.name == 'ok') {
-        onSuccess(inMessage.arg);
-      } else {
-        onError(inMessage.arg);
-      }
-    });
-};
-
-/**
- * Create a wam.remote.fs.execute.Request instance to handle the proxying of an
- * execute context.
- */
-wam.remote.fs.handshake.Request.prototype.onExecuteContextCreated_ = function(
-    executeContext) {
-  new wam.remote.fs.execute.Request(this, executeContext);
-};
-
-/**
- * Create a wam.remote.fs.open.Request instance to handle the proxying of an
- * open context.
- */
-wam.remote.fs.handshake.Request.prototype.onOpenContextCreated_ = function(
-    openContext) {
-  new wam.remote.fs.open.Request(this, openContext);
-};
-
-/**
- * Front a wam.binding.fs.FileSystem binding with a wam.FileSystem handshake
- * response.
- *
- * Inbound messages to the handshake will raise events on the binding.
- *
- * @param {wam.InMessage} inMessage The inbound 'handshake' message.
- * @param {wam.binding.fs.FileSystem} The binding to excite.
- */
-wam.remote.fs.handshake.Response = function(inMessage, fileSystem) {
-  this.inMessage = inMessage;
-  this.fileSystem = fileSystem;
-
-  this.readyResponse = new wam.remote.ready.Response(inMessage);
-  this.readyResponse.readyBinding.dependsOn(fileSystem);
-  this.readyResponse.onMessage.addListener(this.onMessage_.bind(this));
-
-  this.readyBinding = this.readyResponse.readyBinding;
-};
-
-/**
- * Mark the binding as ready.
- *
- * @param {Object} value The ready value to provide.  This may be an object
- *   with a 'name' property, suggesting a short name for this file system.
- */
-wam.remote.fs.handshake.Response.prototype.sendReady = function(value) {
-  this.readyResponse.readyBinding.ready(value || null);
-};
-
-/**
- * Handle inbound messages regarding the handshake.
- */
-wam.remote.fs.handshake.Response.prototype.onMessage_ = function(inMessage) {
-  switch (inMessage.name) {
-    case 'stat':
-      this.fileSystem.stat(
-          inMessage.arg,
-          function(value) { inMessage.replyOk(value) },
-          function(value) { inMessage.replyErrorValue(value) });
-      break;
-
-    case 'unlink':
-      this.fileSystem.unlink(
-          inMessage.arg,
-          function(value) { inMessage.replyOk(value) },
-          function(value) { inMessage.replyErrorValue(value) });
-      break;
-
-    case 'list':
-      this.fileSystem.list(
-          inMessage.arg,
-          function(value) { inMessage.replyOk(value) },
-          function(value) { inMessage.replyErrorValue(value) });
-      break;
-
-    case 'execute':
-      var executeContext = this.fileSystem.createExecuteContext();
-      var executeReply = new wam.remote.fs.execute.Response(
-          inMessage, executeContext);
-      executeContext.setEnvs(inMessage.arg.execEnv);
-      executeContext.setTTY(inMessage.arg.tty || {});
-      executeContext.execute(inMessage.arg.path, inMessage.arg.execArg);
-      break;
-
-    case 'open':
-      var openContext = this.fileSystem.createOpenContext();
-      var openReply = new wam.remote.fs.open.Response(
-          inMessage, openContext);
-      openContext.open(inMessage.arg.path, inMessage.arg.openArg);
-      break;
-  }
-};
-// SOURCE FILE: wam/js/wam_remote_fs_execute.js
-// Copyright (c) 2014 The Chromium OS Authors. All rights reserved.
-// Use of this source code is governed by a BSD-style license that can be
-// found in the LICENSE file.
-
-'use strict';
-
-/**
- * Request/Response classes to marshal an wam.binding.fs.ExecuteContext over a
- * wam channel.
- */
-wam.remote.fs.execute = {};
-
-wam.remote.fs.execute.Request = function(handshakeRequest, executeContext) {
-  this.handshakeRequest = handshakeRequest;
-  this.executeContext = executeContext;
-
-  this.readyRequest = new wam.remote.ready.Request(executeContext);
-  this.readyRequest.onMessage.addListener(this.onMessage_.bind(this));
-
-  executeContext.dependsOn(handshakeRequest.readyRequest.readyBinding);
-  executeContext.onExecute.addListener(this.onExecute_.bind(this));
-  executeContext.onTTYChange.addListener(this.onTTYChange_.bind(this));
-  executeContext.onStdIn.addListener(this.onStdIn_.bind(this));
-  executeContext.onSignal.addListener(this.onSignal_.bind(this));
-};
-
-wam.remote.fs.execute.Request.prototype.onExecute_ = function() {
-  var outMessage = this.handshakeRequest.readyRequest.createMessage(
-      'execute',
-      {'path': this.executeContext.path,
-       'execArg': this.executeContext.arg,
-       'execEnv': this.executeContext.env_,
-       'tty': this.executeContext.tty_
-      });
-
-  this.readyRequest.sendRequest(outMessage);
-};
-
-wam.remote.fs.execute.Request.prototype.onStdIn_ = function(value) {
-  this.readyRequest.send('stdin', value);
-};
-
-wam.remote.fs.execute.Request.prototype.onSignal_ = function(name) {
-  this.readyRequest.send('signal', name);
-};
-
-wam.remote.fs.execute.Request.prototype.onTTYChange_ = function(tty) {
-  if (this.readyRequest.readyBinding.isOpen)
-    this.readyRequest.send('tty-change', tty);
-};
-
-wam.remote.fs.execute.Request.prototype.onMessage_ = function(inMessage) {
-  if (inMessage.name == 'stdout' || inMessage.name == 'stderr') {
-    var onAck = null;
-    if (inMessage.isOpen) {
-      onAck = function(value) {
-        inMessage.replyOk(typeof value == 'undefined' ? null : value);
-      };
-    }
-
-    if (inMessage.name == 'stdout') {
-      this.executeContext.stdout(inMessage.arg, onAck);
-    } else {
-      this.executeContext.stderr(inMessage.arg, onAck);
-    }
-
-  } else if (inMessage.name == 'tty-request') {
-    this.executeContext.requestTTY(inMessage.arg);
-
-  } else if (inMessage.name != 'stdout' && inMessage.name != 'stderr' &&
-             !inMessage.isFinalReply) {
-    console.warn('remote execute request received unexpected message: ' +
-                 inMessage.name, inMessage.arg);
-    if (inMessage.isOpen) {
-      inMessage.replyError('wam.UnexpectedMessage',
-                           [inMessage.name, inMessage.arg]);
-    }
-  }
-};
-
-/**
- *
- */
-wam.remote.fs.execute.Response = function(inMessage, executeContext) {
-  this.inMessage = inMessage;
-
-  this.executeContext = executeContext;
-  this.executeContext.onStdOut.addListener(this.onStdOut_, this);
-  this.executeContext.onStdErr.addListener(this.onStdErr_, this);
-  this.executeContext.onTTYRequest.addListener(this.onTTYRequest_.bind(this));
-
-  this.readyResponse = new wam.remote.ready.Response(inMessage, executeContext);
-  this.readyResponse.onMessage.addListener(this.onMessage_.bind(this));
-};
-
-wam.remote.fs.execute.Response.prototype.onMessage_ = function(inMessage) {
-  switch (inMessage.name) {
-    case 'stdin':
-      var onAck = null;
-      if (inMessage.isOpen) {
-        onAck = function(value) {
-          inMessage.replyOk(typeof value == 'undefined' ? null : value);
-        };
-      }
-
-      this.executeContext.stdin(inMessage.arg, onAck);
-      break;
-
-    case 'tty-change':
-      this.executeContext.setTTY(inMessage.arg);
-      break;
-
-    case 'signal':
-      this.executeContext.signal(inMessage.arg.name, inMessage.arg.value);
-      break;
-  }
-};
-
-wam.remote.fs.execute.Response.prototype.onTTYRequest_ = function(value) {
-  this.readyResponse.send('tty-request', value);
-};
-
-wam.remote.fs.execute.Response.prototype.onStdOut_ = function(value, onAck) {
-  this.readyResponse.send('stdout', value,
-                          (onAck ?
-                           function(inMessage) { onAck(inMessage.arg) } :
-                           null));
-};
-
-wam.remote.fs.execute.Response.prototype.onStdErr_ = function(value, onAck) {
-  this.readyResponse.send('stderr', value,
-                          (onAck ?
-                           function(inMessage) { onAck(inMessage.arg) } :
-                           null));
-};
-// SOURCE FILE: wam/js/wam_remote_fs_open.js
-// Copyright (c) 2014 The Chromium OS Authors. All rights reserved.
-// Use of this source code is governed by a BSD-style license that can be
-// found in the LICENSE file.
-
-'use strict';
-
-/**
- * Request/Response classes to marshal an wam.binding.fs.OpenContext over a
- * wam channel.
- */
-wam.remote.fs.open = {};
-
-/**
- * Install event listeners on the supplied wam.binding.fs.OpenContext so that
- * requests for open/seek/read/write are send over the an established
- * wam.remote.fs.handshake.Request.
- *
- * @param {wam.remote.fs.handshake.Request} handshakeRequest An established
- *   'wam.FileSystem' handshake which should service the open context.
- * @param {wam.binding.fs.OpenContext} openContext
- */
-wam.remote.fs.open.Request = function(handshakeRequest, openContext) {
-  this.handshakeRequest = handshakeRequest;
-  this.openContext = openContext;
-
-  this.readyRequest = new wam.remote.ready.Request(openContext);
-  this.readyRequest.onMessage.addListener(this.onMessage_.bind(this));
-
-  openContext.dependsOn(handshakeRequest.readyRequest.readyBinding);
-  openContext.onOpen.addListener(this.onOpen_.bind(this));
-  openContext.onSeek.addListener(this.onSeek_.bind(this));
-  openContext.onRead.addListener(this.onRead_.bind(this));
-  openContext.onWrite.addListener(this.onWrite_.bind(this));
-};
-
-/**
- * Handle the wam.binding.fs.OpenContext onOpen event.
- */
-wam.remote.fs.open.Request.prototype.onOpen_ = function() {
-  var outMessage = this.handshakeRequest.readyRequest.createMessage(
-      'open',
-      {'path': this.openContext.path,
-       'openArg': {
-         mode: this.openContext.mode
-       }
-      });
-
-  this.readyRequest.sendRequest(outMessage);
-};
-
-/**
- * Handle the wam.binding.fs.OpenContext onSeek event.
- */
-wam.remote.fs.open.Request.prototype.onSeek_ = function(
-    value, onSuccess, onError) {
-  this.readyRequest.send('seek', value, function(inMessage) {
-      if (inMessage.name == 'ok') {
-        onSuccess(inMessage.arg);
-      } else {
-        onError(inMessage.arg);
-      }
-    });
-};
-
-/**
- * Handle the wam.binding.fs.OpenContext onRead event.
- */
-wam.remote.fs.open.Request.prototype.onRead_ = function(
-    value, onSuccess, onError) {
-  this.readyRequest.send('read', value, function(inMessage) {
-      if (inMessage.name == 'ok') {
-        onSuccess(inMessage.arg);
-      } else {
-        onError(inMessage.arg);
-      }
-    });
-};
-
-/**
- * Handle the wam.binding.fs.OpenContext onWrite event.
- */
-wam.remote.fs.open.Request.prototype.onWrite_ = function(
-    value, onSuccess, onError) {
-  this.readyRequest.send('write', value, function(inMessage) {
-      if (inMessage.name == 'ok') {
-        onSuccess(inMessage.arg);
-      } else {
-        onError(inMessage.arg);
-      }
-    });
-};
-
-/**
- * Handle inbound messages on the open context.
- *
- * We don't actually expect any of these at the moment, so we just make sure
- * to close out any open messages with an error reply.
- */
-wam.remote.fs.open.Request.prototype.onMessage_ = function(inMessage) {
-  if (!inMessage.isFinalReply) {
-    console.warn('remote open request received unexpected message: ' +
-                 inMessage.name, inMessage.arg);
-    if (inMessage.isOpen) {
-      inMessage.replyError('wam.UnexpectedMessage',
-                           [inMessage.name, inMessage.arg]);
-    }
-  }
-};
-
-/**
- * Connect an inbound 'open' message to the given wam.binding.fs.OpenContext.
- *
- * When the OpenContext becomes ready, this will send the 'ready' reply.
- * Additional 'seek', 'read', or 'write' replies to the 'ready' message will
- * fire onSeek/Read/Write on the OpenContext binding.
- *
- * @param {wam.InMessage} inMessage An 'open' message received in the context
- *   of a wam.FileSystem handshake.
- * @param {wam.binding.fs.OpenContext} openContext
- */
-wam.remote.fs.open.Response = function(inMessage, openContext) {
-  this.inMessage = inMessage;
-  this.openContext = openContext;
-  this.readyResponse = new wam.remote.ready.Response(inMessage, openContext);
-  this.readyResponse.onMessage.addListener(this.onMessage_.bind(this));
-};
-
-/**
- * Route additional messages in the scope of this open context to the binding.
- */
-wam.remote.fs.open.Response.prototype.onMessage_ = function(inMessage) {
-  var onSuccess = function(value) { inMessage.replyOk(value) };
-  var onError = function(value) { inMessage.replyError(value) };
-
-  var checkOpen = function() {
-    if (inMessage.isOpen)
-      return true;
-
-    console.log('Received "' + inMessage.name + '" message without a subject.');
-    return false;
-  };
-
-  switch (inMessage.name) {
-    case 'seek':
-      if (!checkOpen())
-        return;
-
-      this.openContext.seek(inMessage.arg, onSuccess, onError);
-      break;
-
-    case 'read':
-      if (!checkOpen())
-        return;
-
-      this.openContext.read(inMessage.arg, onSuccess, onError);
-      break;
-
-    case 'write':
-      if (!checkOpen())
-        return;
-
-      this.openContext.write(inMessage.arg, onSuccess, onError);
-      break;
-  }
-};
-// SOURCE FILE: wam/js/wam_jsfs.js
-// Copyright (c) 2014 The Chromium OS Authors. All rights reserved.
-// Use of this source code is governed by a BSD-style license that can be
-// found in the LICENSE file.
-
-'use strict';
-
-wam.jsfs = {};
-
-/**
- * Convert the given ArrayBuffer into a utf8 string.
- *
- * @param {ArrayBuffer} buffer.
- * @return {string}
- */
-wam.jsfs.arrayBufferToUTF8 = function(buffer) {
-  var view = new DataView(buffer);
-  var ary = [];
-  ary.length = buffer.byteLength;
-  for (var i = 0; i < buffer.byteLength; i++) {
-      ary[i] = String.fromCharCode(view.getUint8(i));
-  }
-
-  return ary.join('');
-};
-// SOURCE FILE: wam/js/wam_jsfs_file_system.js
-// Copyright (c) 2014 The Chromium OS Authors. All rights reserved.
-// Use of this source code is governed by a BSD-style license that can be
-// found in the LICENSE file.
-
-'use strict';
-
-/**
- * An object that connects a wam.binding.fs.FileSystem to an in-memory file
- * system composed of objects derived from wam.jsfs.Entry.
- *
- * See wam.jsfs.Directory, wam.jsfs.Executable, wam.jsfs.RemoteFileSystem,
- * and wam.jsfs.dom.FileSystem for examples of entries that can be used
- * with one of these.
- *
- * @param {wam.jsfs.Directory} opt_rootDirectory An optional directory instance
- *   to use as the root.
- */
-wam.jsfs.FileSystem = function(opt_rootDirectory) {
-  this.rootDirectory_ = opt_rootDirectory || new wam.jsfs.Directory();
-  this.defaultBinding = new wam.binding.fs.FileSystem();
-  this.addBinding(this.defaultBinding);
-  this.defaultBinding.ready();
-};
-
-/**
- * Connect a file system binding to this file system implementation.
- *
- * We'll subscribe to events on the binding and provide the implementation for
- * stat, unlink, list, execute, and open related functionality.
- *
- * @param {wam.binding.fs.FileSystem} binding
- */
-wam.jsfs.FileSystem.prototype.addBinding = function(binding) {
-  binding.onStat.addListener(this.onStat_, this);
-  binding.onUnlink.addListener(this.onUnlink_, this);
-  binding.onList.addListener(this.onList_, this);
-  binding.onExecuteContextCreated.addListener(
-      this.onExecuteContextCreated_, this);
-  binding.onOpenContextCreated.addListener(
-      this.onOpenContextCreated_, this);
-
-  binding.onClose.addListener(this.removeBinding.bind(this, binding));
-};
-
-/**
- * Remove a binding.
- *
- * @param {wam.binding.fs.FileSystem} binding
- */
-wam.jsfs.FileSystem.prototype.removeBinding = function(binding) {
-  binding.onStat.removeListener(this.onStat_, this);
-  binding.onUnlink.removeListener(this.onUnlink_, this);
-  binding.onList.removeListener(this.onStat_, this);
-  binding.onExecuteContextCreated.removeListener(
-      this.onExecuteContextCreated_, this);
-  binding.onOpenContextCreated.removeListener(
-      this.onOpenContextCreated_, this);
-};
-
-/**
- * Publish this file system on the given wam.Channel.
- *
- * If the other end of the channel offers a 'wam.Filesystem' handshake, we'll
- * accept it on behalf of this file system.
- *
- * @param {wam.Channel} channel The channel to publish on.
- * @param {string} name A short name to identify this file system to the other
- *   party.  This is sent to the other party when we accept their handshake
- *   offer.  There is currently no provision for selecting a file system by
- *   name as part of the handshake offer.
- */
-wam.jsfs.FileSystem.prototype.publishOn = function(channel, name) {
-  var readyValue = name ? {name: name} : null;
-
-  channel.onHandshakeOffered.addListener(function(offerEvent) {
-      if (offerEvent.response ||
-          !wam.remote.fs.testOffer(offerEvent.inMessage)) {
-        return;
-      }
-
-      this.handshakeResponse = new wam.remote.fs.handshake.Response(
-          offerEvent.inMessage, this.defaultBinding);
-
-      this.handshakeResponse.sendReady(readyValue);
-      offerEvent.response = this.handshakeResponse;
-    }.bind(this));
-};
-
-/**
- * Ensure that the given path exists.
- *
- * Any missing directories are created as wam.jsfs.Directory instances.
- * The onSuccess handler will be passed the final directory instance.  If
- * an error occurs, the path may have been partially constructed.
- */
-wam.jsfs.FileSystem.prototype.makePath = function(
-    path, onSuccess, onError) {
-  var makeNextPath = function(directoryEntry, pathList) {
-    if (pathList.length == 0) {
-      onSuccess(directoryEntry);
-      return;
-    }
-
-    var childDir = new wam.jsfs.Directory();
-    directoryEntry.addEntry(pathList.shift(),
-                            childDir,
-                            makeNextPath.bind(null, childDir, pathList),
-                            onError);
-  };
-
-  this.partialResolve
-  (path,
-   function (prefixList, pathList, resolvedEntry) {
-     if (!resolvedEntry) {
-       onError(wam.mkerr('wam.FileSystem.Error.NotFound', [path]));
-       return;
-     }
-
-     if (!resolvedEntry.can('LIST')) {
-       onError(wam.mkerr('wam.FileSystem.Error.NotListable',
-                         ['/' + prefixList.join('/')]));
-       return;
-     }
-
-     if (pathList.length == 0) {
-       onSuccess(resolvedEntry);
-       return;
-     }
-
-     makeNextPath(resolvedEntry, pathList);
-   },
-   onError);
-};
-
-/**
- * Call ..makePath sequentially, once for each path in pathList.
- *
- * If any path fails, stop the sequence and call onError.
- *
- * @param {Array<string>} pathList The list of paths to create.
- * @param {function()} onSuccess The function to invoke if all paths are created
- *   successfully.
- * @param {function(wam.Error)} onError The function to invoke if a path fails.
- *   Remaning paths will not be created.
- */
-wam.jsfs.FileSystem.prototype.makePaths = function(
-    pathList, onSuccess, onError) {
-  var makeNextPath = function(i, directoryEntry) {
-    if (i == pathList.length) {
-      onSuccess(directoryEntry);
-      return;
-    }
-
-    this.makePath(pathList[i], makeNextPath.bind(null, i + 1), onError);
-  }.bind(this);
-
-  makeNextPath(0, null);
-};
-
-/**
- * Add a wam.jsfs.Entry subclass to the file system at the specified path.
- *
- * If necessary, wam.jsfs.Directory entries will be created for missing
- * path elements.
- *
- * @param {string} path The path to the entry.
- * @param {wam.jsfs.Entry} entry The wam.jsfs.Entry subclass to place at the
- *   path.
- * @param {function()} onSuccess The function to invoke on success.
- * @param {function(wam.Error)} onError The function to invoke on error.
- */
-wam.jsfs.FileSystem.prototype.makeEntry = function(
-    path, entry, onSuccess, onError) {
-  var dirName = wam.binding.fs.dirName(path);
-  var baseName = wam.binding.fs.baseName(path);
-  var map = {};
-  map[baseName] = entry;
-  this.makeEntries(dirName, map, onSuccess, onError);
-};
-
-/**
- * Ensure that the given path exists, then add the given entries to it.
- *
- * @param {string} path The path to the parent directory for these entries.
- *   Will be created if necessary.
- * @param {Object} entryMap A map of one or more {name: wam.jsfs.Entry}.
- * @param {function()} onSuccess The function to invoke on success.
- * @param {function(wam.Error)} onError The function to invoke on error.
- */
-wam.jsfs.FileSystem.prototype.makeEntries = function(
-    path, entryMap, onSuccess, onError) {
-
-  var entryNames = Object.keys(entryMap);
-  var makeNextEntry = function(directoryEntry) {
-    if (entryNames.length == 0) {
-      onSuccess(directoryEntry);
-      return;
-    }
-
-    var name = entryNames.shift()
-    directoryEntry.addEntry(name, entryMap[name],
-                            makeNextEntry.bind(null, directoryEntry),
-                            onError);
-  };
-
-  this.makePath(path, makeNextEntry, onError);
-};
-
-/**
- * Resolve the given path as far as possible.
- *
- * The success callback will receive three arguments:
- *   prefixList - An array of path names that were successfully resolved.
- *   pathList - The remaining path names, starting with the first that could not
- *     be found.
- *   entry - The entry instance that represents the final element of prefixList.
- *     This is not guaranteed to be a directory entry.
- *
- * If the partialResolve succeeds, it means that all of the path elements on the
- * prefixList were found, and the elements on the pathList are yet-to-be
- * resolved.  The entry is the final wam.jsfs.Entry that was resolved.
- *
- * The meaning of this success depends on the context.  If the resolved Entry
- * can 'FORWARD', then this isn't necessarily a completed success or failure
- * yet.
- *
- * @param {string} path The path to resolve.
- * @param {function(Array, Array, wam.jsfs.Entry)} The function to invoke on
- *   success.
- * @param {function(wam.Error)} onError The function to invoke on error.
- */
-wam.jsfs.FileSystem.prototype.partialResolve = function(
-    path, onSuccess, onError) {
-  if (!onSuccess || !onError)
-    throw new Error('Missing onSuccess or onError');
-
-  if (!path || path == '/') {
-    wam.async(onSuccess, [null, [], [], this.rootDirectory_]);
-    return;
-  }
-
-  var ary = path.match(/^\/?([^/]+)(.*)/);
-  if (!ary) {
-    wam.async(onError,
-              [null, wam.mkerr('wam.FileSystem.Error.InvalidPath', [path])]);
-    return;
-  }
-
-  if (path.substr(0, 1) == '/')
-    path = path.substr(1);
-
-  this.rootDirectory_.partialResolve(
-      [], wam.binding.fs.splitPath(path),
-      onSuccess, onError);
-};
-
-/**
- * Handle the onStat event for a wam.binding.fs.FileSystem.
- */
-wam.jsfs.FileSystem.prototype.onStat_ = function(arg, onSuccess, onError) {
-  if (typeof arg.path != 'string') {
-    console.error('Missing argument: path');
-    wam.async(onError,
-              [null, wam.mkerr('wam.Error.MissingArgument', ['path'])]);
-    return;
-  }
-
-  var onPartialResolve = function(prefixList, pathList, entry) {
-    if (entry.can('FORWARD')) {
-      entry.forwardStat
-      ({fullPath: arg.path, forwardPath: pathList.join('/')},
-       onSuccess, onError);
-      return;
-    }
-
-    if (pathList.length) {
-      onError(wam.mkerr('wam.FileSystem.Error.NotFound', [arg.path]));
-      return;
-    }
-
-    entry.getStat(onSuccess, onError);
-  };
-
-  this.partialResolve(arg.path, onPartialResolve, onError);
-};
-
-/**
- * Handle the onUnlink event for a wam.binding.fs.FileSystem.
- */
-wam.jsfs.FileSystem.prototype.onUnlink_ = function(arg, onSuccess, onError) {
-  if (typeof arg.path != 'string') {
-    console.error('Missing argument: path');
-    wam.async(onError,
-              [null, wam.mkerr('wam.Error.MissingArgument', ['path'])]);
-    return;
-  }
-
-  var onPartialResolve = function(prefixList, pathList, entry) {
-    if (entry.can('FORWARD')) {
-      entry.forwardUnlink
-      ({fullPath: arg.path, forwardPath: pathList.join('/') + '/' + targetName},
-       onSuccess, onError);
-      return;
-    }
-
-    if (pathList.length) {
-      onError(wam.mkerr('wam.FileSystem.Error.NotFound', [parentPath]));
-      return;
-    }
-
-    if (!entry.can('LIST')) {
-      onError(wam.mkerr('wam.FileSystem.Error.NotListable', [parentPath]));
-      return;
-    }
-
-    entry.doUnlink(targetName, onSuccess, onError);
-  };
-
-  var parentPath = wam.binding.fs.dirName(arg.path);
-  var targetName = wam.binding.fs.baseName(arg.path);
-
-  this.partialResolve(parentPath, onPartialResolve, onError);
-};
-
-/**
- * Handle the onList event for a wam.binding.fs.FileSystem.
- */
-wam.jsfs.FileSystem.prototype.onList_ = function(arg, onSuccess, onError) {
-  if (!onSuccess || !onError)
-    throw new Error('Missing callback', onSuccess, onError);
-
-  if (typeof arg.path != 'string') {
-    console.error('Missing argument: path');
-    wam.async(onError,
-              [null, wam.mkerr('wam.FileSystem.Error.BadOrMissingArgument',
-                               ['path'])]);
-    return;
-  }
-
-  var onPartialResolve = function(prefixList, pathList, entry) {
-    if (entry.can('FORWARD')) {
-      entry.forwardList
-      ({fullPath: arg.path, forwardPath: pathList.join('/')},
-       onSuccess, onError);
-      return;
-    }
-
-    if (pathList.length) {
-      onError(wam.mkerr('wam.FileSystem.Error.NotFound', [arg.path]));
-      return;
-    }
-
-    if (!entry.can('LIST')) {
-      onError(wam.mkerr('wam.FileSystem.Error.NotListable', [arg.path]));
-      return;
-    }
-
-    entry.listEntryStats(onSuccess);
-  };
-
-  this.partialResolve(arg.path, onPartialResolve, onError);
-};
-
-/**
- * Handle the onExecuteContextCreated event for a wam.binding.fs.FileSystem.
- */
-wam.jsfs.FileSystem.prototype.onExecuteContextCreated_ = function(
-    executeContext) {
-  new wam.jsfs.ExecuteContext(this, executeContext);
-};
-
-/**
- * Handle the onOpenContextCreated event for a wam.binding.fs.FileSystem.
- */
-wam.jsfs.FileSystem.prototype.onOpenContextCreated_ = function(openContext) {
-  new wam.jsfs.OpenContext(this, openContext);
-};
-// SOURCE FILE: wam/js/wam_jsfs_entry.js
-// Copyright (c) 2014 The Chromium OS Authors. All rights reserved.
-// Use of this source code is governed by a BSD-style license that can be
-// found in the LICENSE file.
-
-'use strict';
-
-wam.jsfs.Entry = function() {};
-
-/**
- * List of operation types that may be supported by a filesystem entry and the
- * methods they imply.
- *
- * All entries must support:
- *
- * - getStat(onSuccess, onError)
- *
- * Listable entries must support:
- *
- * - addEntry(name, entry, onSuccess, onError)
- * - listEntryStats(onSuccess)
- * - partialResolve(prefixList, pathList, onSuccess, onError)
- * - doUnlink(name, onSuccess, onError)
- *
- * Forwardable entries must support:
- *
- * - forwardExecute(arg)
- *   @param {Object} arg The forward argument.  Contains 'executeContext' and
- *     'forwardPath' properties for the local executeContext and target file
- *     relative to the containing file system, and the forwarded file system.
- *
- * - forwardList(arg, onSuccess, onError)
- *   @param {Object} arg The forward argument.  Contains 'fullPath' and
- *     'forwardPath' properties locating the target file relative to the
- *     containing file system, and the forwarded file system.
- *   @param {function(Object)} onSuccess The function to invoke with the wam
- *     'list' result if the call succeeds.
- *   @param {function(wam.Error)} onError
- *
- * - forwardOpen(arg)
- *   @param {Object} arg The forward argument.  Contains 'openContext' and
- *     'forwardPath' properties for the local wam.binding.fs.OpenContext and
- *     target file relative to the containing file system, and the forwarded
- *     file system.
- *
- * - forwardStat(arg, onSuccess, onError)
- *   @param {Object} arg The forward argument.  Contains 'fullPath' and
- *     'forwardPath' properties locating the target file relative to the
- *     containing file system, and the forwarded file system.
- *   @param {function(Object)} onSuccess The function to invoke with the wam
- *     'stat' result if the call succeeds.
- *   @param {function(wam.Error)} onError
- *
- * - forwardUnlink(arg, onSuccess, onError)
- *   @param {Object} arg The forward argument.  Contains 'fullPath' and
- *     'forwardPath' properties locating the target file relative to the
- *     containing file system, and the forwarded file system.
- *   @param {function(Object)} onSuccess The function to invoke with the wam
- *     'unlink' result if the call succeeds.
- *   @param {function(wam.Error)} onError
- */
-wam.jsfs.Entry.ability = {
-  'LIST': ['addEntry', 'getStat', 'listEntryStats', 'partialResolve',
-           'doUnlink'],
-  'OPEN': ['getStat'],
-  'EXECUTE': ['getStat'],
-  'FORWARD': ['forwardExecute', 'forwardList', 'forwardOpen',
-              'forwardStat', 'forwardUnlink', 'getStat']
-};
-
-/**
- * Create a prototype object to use for a wam.jsfs.Entry subclass, mark it as
- * supporting the given abilities, and verify that it has the required methods.
- */
-wam.jsfs.Entry.subclass = function(abilities) {
-  var proto = Object.create(wam.jsfs.Entry.prototype);
-  proto.abilities = abilities;
-  wam.async(wam.jsfs.Entry.checkMethods_, [null, proto, (new Error()).stack]);
-
-  return proto;
-};
-
-/**
- * Check that a wam.jsfs.Entry subclass has all the methods it's supposed to
- * have.
- */
-wam.jsfs.Entry.checkMethods_ = function(proto, stack) {
-  var abilities = proto.abilities;
-  if (!abilities || abilities.length == 0)
-    throw new Error('Missing abilities property, ' + stack);
-
-  if (abilities.indexOf('FORWARD') != -1) {
-    // Entries marked for FORWARD only need to support the FORWARD methods.
-    // Additional abilities only advise what can be forwarded.
-    abilities = ['FORWARD'];
-  }
-
-  var checkMethods = function(opname, nameList) {
-    for (var i = 0; i < nameList.length; i++) {
-      if (typeof proto[nameList[i]] != 'function')
-          throw new Error('Missing ' + opname + ' method: ' + nameList[i]);
-    }
-  };
-
-  for (var i = 0; i < abilities.length; i++) {
-    if (abilities[i] in wam.jsfs.Entry.ability) {
-      checkMethods(abilities[i], wam.jsfs.Entry.ability[abilities[i]]);
-    } else {
-      throw new Error('Unknown operation: ' + abilities[i]);
-    }
-  }
-};
-
-/**
- * Check if this entry supports the given ability.
- */
-wam.jsfs.Entry.prototype.can = function(name) {
-  return (this.abilities.indexOf(name) != -1);
-};
-// SOURCE FILE: wam/js/wam_jsfs_remote_file_system.js
-// Copyright (c) 2014 The Chromium OS Authors. All rights reserved.
-// Use of this source code is governed by a BSD-style license that can be
-// found in the LICENSE file.
-
-'use strict';
-
-/**
- * A jsfs.Entry subclass that proxies to a wam file system connected via a
- * wam.Channel.
- *
- * @param {wam.Channel} channel The channel hosting the wam file system.
- */
-wam.jsfs.RemoteFileSystem = function(channel) {
-  wam.jsfs.Entry.call(this);
-
-  this.channel = channel;
-  this.channel.readyBinding.onReady.addListener(this.onChannelReady_, this);
-
-  this.remoteName = null;
-
-  this.handshakeRequest_ = null;
-  this.remoteFileSystem_ = null;
-
-  this.pendingOperations_ = [];
-
-  this.onReady = new wam.Event();
-  this.onClose = new wam.Event();
-
-  if (this.channel.readyBinding.isReadyState('READY'))
-    this.offerHandshake();
-};
-
-/**
- * We're an Entry subclass that is able to FORWARD and LIST.
- */
-wam.jsfs.RemoteFileSystem.prototype = wam.jsfs.Entry.subclass(
-    ['FORWARD', 'LIST']);
-
-/**
- * Return a wam 'stat' value for the FileSystem itself.
- *
- * This is a jsfs.Entry method needed as part of the 'LIST' action.
- */
-wam.jsfs.RemoteFileSystem.prototype.getStat = function(onSuccess, onError) {
-  var readyState = 'UNDEFINED';
-  if (this.remoteFileSystem_)
-    readyState = this.remoteFileSystem_.readyState;
-
-  wam.async(onSuccess,
-            [null,
-             {abilities: this.abilities,
-              state: readyState,
-              channel: this.channel.name,
-              source: 'wamfs'
-             }]);
-};
-
-/**
- * Reconnect the wam.Channel if necessary, then offer a wam.FileSystem
- * 'handshake' message.
- *
- * @param {function()} onSuccess
- * @param {function(wam.Error)} onError
- */
-wam.jsfs.RemoteFileSystem.prototype.connect = function(onSuccess, onError) {
-  if (this.remoteFileSystem_ && this.remoteFileSystem_.isReadyState('READY'))
-    throw new Error('Already connected');
-
-  this.pendingOperations_.push([onSuccess, onError]);
-
-  if (this.remoteFileSystem_ && this.remoteFileSystem_.isReadyState('WAIT'))
-    return;
-
-  if (this.channel.readyBinding.isReadyState('READY')) {
-    this.offerHandshake();
-  } else {
-    this.channel.reconnect();
-  }
-};
-
-/**
- * Offer a wam.FileSystem 'handshake' message over the associated channel.
- */
-wam.jsfs.RemoteFileSystem.prototype.offerHandshake = function() {
-  if (this.remoteFileSystem_) {
-    if (this.remoteFileSystem_.isReadyState('READY'))
-      throw new Error('Already ready.');
-
-    this.remoteFileSystem_.onReady.removeListener(
-        this.onFileSystemReady_, this);
-  }
-
-  this.handshakeRequest_ = new wam.remote.fs.handshake.Request(this.channel);
-  this.remoteFileSystem_ = this.handshakeRequest_.fileSystem;
-  this.remoteFileSystem_.onReady.addListener(this.onFileSystemReady_, this);
-  this.remoteFileSystem_.onClose.addListener(this.onFileSystemClose_, this);
-  this.handshakeRequest_.sendRequest();
-};
-
-/**
- * Handle the onReady event from the channel's ready binding.
- */
-wam.jsfs.RemoteFileSystem.prototype.onChannelReady_ = function() {
-  this.offerHandshake();
-};
-
-/**
- * Handle the onReady event from the handshake offer.
- */
-wam.jsfs.RemoteFileSystem.prototype.onFileSystemReady_ = function(value) {
-  if (typeof value == 'object' && value.name)
-    this.remoteName = value.name;
-
-  while (this.pendingOperations_.length) {
-    var onSuccess = this.pendingOperations_.shift()[0];
-    onSuccess();
-  }
-
-  this.onReady(value);
-};
-
-/**
- * Handle an onClose from the handshake offer.
- */
-wam.jsfs.RemoteFileSystem.prototype.onFileSystemClose_ = function(
-    reason, value) {
-  this.remoteFileSystem_.onReady.removeListener(this.onFileSystemReady_, this);
-  this.remoteFileSystem_.onClose.removeListener(this.onFileSystemClose_, this);
-
-  this.onClose(reason, value);
-
-  this.handshakeRequest_ = null;
-  this.remoteFileSystem_ = null;
-
-  if (reason == 'error') {
-    while (this.pendingOperations_.length) {
-      var onError = this.pendingOperations_.shift()[1];
-      onError();
-    }
-  }
-};
-
-/**
- * If this FileSystem isn't ready, try to make it ready and queue the callback
- * for later, otherwise call it right now.
- *
- * @param {function()} callback The function to invoke when the file system
- *   becomes ready.
- * @param {function(wam.Error)} onError The function to invoke if the
- *   file system fails to become ready.
- */
-wam.jsfs.RemoteFileSystem.prototype.doOrQueue_ = function(callback, onError) {
-  if (this.remoteFileSystem_ && this.remoteFileSystem_.isReadyState('READY')) {
-    callback();
-  } else {
-    this.connect(callback, onError);
-  }
-};
-
-/**
- * Forward a stat call to the file system.
- *
- * This is a jsfs.Entry method needed as part of the 'FORWARD' action.
- */
-wam.jsfs.RemoteFileSystem.prototype.forwardStat = function(
-    arg, onSuccess, onError) {
-  this.doOrQueue_(function() {
-      this.remoteFileSystem_.stat({path: arg.forwardPath}, onSuccess, onError);
-    }.bind(this), onError);
-};
-
-/**
- * Forward an unlink call to the file system.
- *
- * This is a jsfs.Entry method needed as part of the 'FORWARD' action.
- */
-wam.jsfs.RemoteFileSystem.prototype.forwardUnlink = function(
-    arg, onSuccess, onError) {
-  this.doOrQueue_(function() {
-      this.remoteFileSystem_.unlink({path: arg.forwardPath},
-                                    onSuccess, onError);
-    }.bind(this),
-    onError);
-};
-
-/**
- * Forward a list call to the LocalFileSystem.
- *
- * This is a jsfs.Entry method needed as part of the 'FORWARD' action.
- */
-wam.jsfs.RemoteFileSystem.prototype.forwardList = function(
-    arg, onSuccess, onError) {
-  this.doOrQueue_(function() {
-      this.remoteFileSystem_.list({path: arg.forwardPath}, onSuccess, onError);
-    }.bind(this),
-    onError);
-};
-
-/**
- * Forward a wam 'execute' to this file system.
- *
- * This is a jsfs.Entry method needed as part of the 'FORWARD' action.
- */
-wam.jsfs.RemoteFileSystem.prototype.forwardExecute = function(arg) {
-  this.doOrQueue_(function() {
-      arg.executeContext.path = arg.forwardPath;
-      var executeRequest = new wam.remote.fs.execute.Request(
-          this.handshakeRequest_, arg.executeContext);
-      executeRequest.onExecute_();
-    }.bind(this),
-    function(value) { arg.executeContext.closeError(value) });
-};
-
-/**
- * Forward a wam 'open' to this file system.
- *
- * This is a jsfs.Entry method needed as part of the 'FORWARD' action.
- */
-wam.jsfs.RemoteFileSystem.prototype.forwardOpen = function(arg) {
-  this.doOrQueue_(function() {
-      arg.openContext.path = arg.forwardPath;
-      var openRequest = new wam.remote.fs.open.Request(
-          this.handshakeRequest_, arg.openContext);
-      openRequest.onOpen_();
-    }.bind(this),
-    function(value) { arg.openContext.closeError(value) });
-};
-// SOURCE FILE: wam/js/wam_jsfs_directory.js
-// Copyright (c) 2014 The Chromium OS Authors. All rights reserved.
-// Use of this source code is governed by a BSD-style license that can be
-// found in the LICENSE file.
-
-'use strict';
-
-/**
- * A wam.jsfs.Entry subclass that represents a directory.
- */
-wam.jsfs.Directory = function() {
-  wam.jsfs.Entry.call(this);
-  this.entries_ = {};
-  this.mtime_ = 0;
-};
-
-/**
- * We're an Entry subclass that is able to LIST.
- */
-wam.jsfs.Directory.prototype = wam.jsfs.Entry.subclass(['LIST']);
-
-/**
- * Add a new wam.jsfs.Entry to this directory.
- *
- * This is a jsfs.Entry method needed as part of the 'LIST' action.
- *
- * @param {string} name The name of the entry to add.
- * @param {wam.jsfs.Entry} entry The Entry subclass to add.
- * @param {function()} onSuccess
- * @param {function(wam.Error)} onError
- */
-wam.jsfs.Directory.prototype.addEntry = function(
-    name, entry, onSuccess, onError) {
-  if (!name) {
-    wam.async(onError,
-              [null, wam.mkerr('wam.FileSystem.Error.InvalidPath', [name])]);
-    return;
-  }
-
-  if (name in this.entries_) {
-    wam.async(onError,
-              [null, wam.mkerr('wam.FileSystem.Error.FileExists', [name])]);
-    return;
-  }
-
-  wam.async(function() {
-      this.entries_[name] = entry;
-      onSuccess();
-    }.bind(this));
-};
-
-/**
- * Remove an entry from this directory.
- *
- * This is a jsfs.Entry method needed as part of the 'LIST' action.
- *
- * @param {string} name The name of the entry to remove.
- * @param {function()} onSuccess
- * @param {function(wam.Error)} onError
- */
-wam.jsfs.Directory.prototype.doUnlink = function(name, onSuccess, onError) {
-  wam.async(function() {
-      if (name in this.entries_) {
-        delete this.entries_[name];
-        onSuccess(null);
-      } else {
-        onError(wam.mkerror('wam.FileSystem.Error.NotFound', [name]));
-      }
-    }.bind(this));
-};
-
-wam.jsfs.Directory.prototype.listEntryStats = function(onSuccess) {
-  var rv = {};
-
-  var statCount = Object.keys(this.entries_).length;
-  if (statCount == 0)
-    wam.async(onSuccess, [null, rv]);
-
-  var onStat = function(name, stat) {
-    rv[name] = {stat: stat};
-    if (--statCount == 0)
-      onSuccess(rv);
-  };
-
-  for (var key in this.entries_) {
-    this.entries_[key].getStat(onStat.bind(null, key),
-                               onStat.bind(null, key, null));
-  }
-};
-
-wam.jsfs.Directory.prototype.getStat = function(onSuccess, onError) {
-  wam.async(onSuccess,
-            [null,
-             { abilities: this.abilities,
-               count: Object.keys(this.entries_).length,
-               source: 'jsfs'
-             }]);
-};
-
-wam.jsfs.Directory.prototype.partialResolve = function(
-    prefixList, pathList, onSuccess, onError) {
-  var entry = this.entries_[pathList[0]];
-  if (!entry) {
-    // The path doesn't exist past this point, signal our partial success.
-    wam.async(onSuccess, [null, prefixList, pathList, this]);
-
-  } else {
-    prefixList.push(pathList.shift());
-
-    if (pathList.length == 0) {
-      // We've found the full path.
-      wam.async(onSuccess, [null, prefixList, pathList, entry]);
-
-    } else if (entry.can('LIST') && !entry.can('FORWARD')) {
-      // We're not done, descend into a child directory to look for more.
-      entry.partialResolve(prefixList, pathList, onSuccess, onError);
-    } else {
-      // We found a non-directory entry, but there are still remaining path
-      // elements.  We'll signal a partial success and let the caller decide
-      // if this is fatal or not.
-      wam.async(onSuccess, [null, prefixList, pathList, entry]);
-    }
-  }
-};
-// SOURCE FILE: wam/js/wam_jsfs_execute_context.js
-// Copyright (c) 2014 The Chromium OS Authors. All rights reserved.
-// Use of this source code is governed by a BSD-style license that can be
-// found in the LICENSE file.
-
-'use strict';
-
-wam.jsfs.ExecuteContext = function(jsfsFileSystem, executeContextBinding) {
-  this.jsfsFileSystem = jsfsFileSystem;
-  this.executeContextBinding = executeContextBinding;
-  executeContextBinding.onExecute.addListener(this.onExecute_, this);
-};
-
-wam.jsfs.ExecuteContext.prototype.onExecute_ = function() {
-  var path = this.executeContextBinding.path;
-
-  var onError = function(value) {
-    this.executeContextBinding.closeErrorValue(value);
-  }.bind(this);
-
-  var onPartialResolve = function(prefixList, pathList, entry) {
-    if (entry.can('FORWARD')) {
-      entry.forwardExecute
-      ({executeContext: this.executeContextBinding,
-        forwardPath: pathList.join('/')});
-      return;
-    }
-
-    if (pathList.length) {
-      onError(wam.mkerr('wam.FileSystem.Error.NotFound', [path]));
-      return;
-    }
-
-    if (!entry.can('EXECUTE')) {
-      onError(wam.mkerr('wam.FileSystem.Error.NotExecutable', [path]));
-      return;
-    }
-
-    entry.execute(this.executeContextBinding, this);
-  }.bind(this);
-
-  this.jsfsFileSystem.partialResolve(path, onPartialResolve, onError);
-};
-// SOURCE FILE: wam/js/wam_jsfs_open_context.js
-// Copyright (c) 2014 The Chromium OS Authors. All rights reserved.
-// Use of this source code is governed by a BSD-style license that can be
-// found in the LICENSE file.
-
-'use strict';
-
-wam.jsfs.OpenContext = function(jsfsFileSystem, openContextBinding) {
-  this.jsfsFileSystem = jsfsFileSystem;
-  this.openContextBinding = openContextBinding;
-  openContextBinding.onOpen.addListener(this.onOpen_, this);
-};
-
-wam.jsfs.OpenContext.prototype.onOpen_ = function() {
-  var path = this.openContextBinding.path;
-
-  var onError = function(value) {
-    this.openContextBinding.closeErrorValue(value);
-  }.bind(this);
-
-  var onPartialResolve = function(prefixList, pathList, entry) {
-    if (entry.can('FORWARD')) {
-      entry.forwardOpen
-      ({openContext: this.openContextBinding,
-        forwardPath: pathList.join('/')});
-      return;
-    }
-
-    if (pathList.length) {
-      onError(wam.mkerr('wam.FileSystem.Error.NotFound', [path]));
-      return;
-    }
-
-    if (!entry.can('OPEN')) {
-      onError(wam.mkerr('wam.FileSystem.Error.NotOpenable', [path]));
-      return;
-    }
-
-    entry.open(this.openContextBinding, this);
-  }.bind(this);
-
-  this.jsfsFileSystem.partialResolve(path, onPartialResolve, onError);
-};
-// SOURCE FILE: wam/js/wam_jsfs_executable.js
-// Copyright (c) 2013 The Chromium OS Authors. All rights reserved.
-// Use of this source code is governed by a BSD-style license that can be
-// found in the LICENSE file.
-
-'use strict';
-
-/**
- */
-wam.jsfs.Executable = function(callback) {
-  wam.jsfs.Entry.call(this);
-  this.callback_ = callback;
-};
-
-wam.jsfs.Executable.prototype = wam.jsfs.Entry.subclass(['EXECUTE']);
-
-wam.jsfs.Executable.prototype.getStat = function(onSuccess, onError) {
-  wam.async(onSuccess,
-            [null,
-             { abilities: this.abilities,
-               source: 'jsfs'}]);
-};
-
-wam.jsfs.Executable.prototype.execute = function(executeContext, arg) {
-  this.callback_(executeContext);
-};
-// SOURCE FILE: wam/js/wam_jsfs_dom.js
-// Copyright (c) 2014 The Chromium OS Authors. All rights reserved.
-// Use of this source code is governed by a BSD-style license that can be
-// found in the LICENSE file.
-
-'use strict';
-
-/**
- * Namespace for stuff related to the DOM FileSystem<->jsfs proxy layer.
- */
-wam.jsfs.dom = {};
-
-/**
- * Convert an HTML5 FileError object into an appropriate wam.FileSystem.Error
- * value.
- *
- * This should be used for errors that were raised in the context of a
- * FileEntry.
- *
- * @param {FileError} error
- * @param {string} path The path that this error relates to.
- */
-wam.jsfs.dom.convertFileError = function(error, path) {
-  if (error.name == 'TypeMismatchError')
-    return wam.mkerr('wam.FileSystem.Error.NotOpenable', [path]);
-
-  if (error.name == 'NotFoundError')
-    return wam.mkerr('wam.FileSystem.Error.NotFound', [path]);
-
-  if (error.name == 'PathExistsError')
-    return wam.mkerr('wam.FileSystem.Error.PathExists', [path]);
-
-  return wam.mkerr('wam.FileSystem.Error.RuntimeError', [error.name]);
-};
-
-/**
- * Convert an HTML5 FileError object into an appropriate wam.FileSystem.Error
- * value.
- *
- * This should be used for errors that were raised in the context of a
- * DirEntry.
- *
- * @param {FileError} error
- * @param {string} path The path that this error relates to.
- */
-wam.jsfs.dom.convertDirError = function(error, path) {
-  if (error.name == 'TypeMismatchError')
-    return wam.mkerr('wam.FileSystem.Error.NotListable', [path]);
-
-  return wam.jsfs.dom.convertFileError(error);
-};
-
-/**
- * Get an appropriate wam 'stat' value for the given HTML5 FileEntry or
- * DirEntry object.
- */
-wam.jsfs.dom.statEntry = function(entry, onSuccess, onError) {
-  var onMetadata = function(entry, metadata) {
-    if (entry.isFile) {
-      onSuccess({
-        source: 'domfs',
-        abilities: ['OPEN'],
-        dataType: 'blob',
-        mtime: new Date(metadata.modificationTime).getTime(),
-        size: metadata.size
-      });
-    } else {
-      onSuccess({
-        source: 'domfs',
-        abilities: ['LIST'],
-        mtime: new Date(metadata.modificationTime).getTime(),
-      });
-    }
-  };
-
-  if ('getMetadata' in entry) {
-    entry.getMetadata(onMetadata.bind(null, entry), onError);
-  } else {
-    onSuccess({abilities: [], source: 'domfs'});
-  }
-};
-// SOURCE FILE: wam/js/wam_jsfs_dom_file_system.js
-// Copyright (c) 2014 The Chromium OS Authors. All rights reserved.
-// Use of this source code is governed by a BSD-style license that can be
-// found in the LICENSE file.
-
-'use strict';
-
-/**
- * A jsfs.Entry subclass that proxies to a DOM LocalFileSystem.
- */
-wam.jsfs.dom.FileSystem = function(opt_capacity) {
-  wam.jsfs.Entry.call(this);
-
-  this.capacity_ = opt_capacity || 16 * 1024 * 1024;
-
-  this.domfs_ = null;
-  this.pendingOperations_ = [];
-
-  this.readyBinding = new wam.binding.Ready();
-  this.readyBinding.onReady.addListener(this.onBindingReady_, this);
-  this.readyBinding.onClose.addListener(this.onBindingClose_, this);
-
-  var onFileSystemFound = function (fileSystem) {
-    this.domfs_ = fileSystem;
-    this.readyBinding.ready();
-  }.bind(this);
-
-  var onFileSystemError = function (error) {
-    console.log('Error getting html5 file system: ' + error);
-    this.readyBinding.closeError(wam.jsfs.dom.convertError(error));
-  }.bind(this);
-
-  var requestFS = window.requestFileSystem || window.webkitRequestFileSystem;
-  requestFS(window.PERSISTENT, this.capacity_,
-            onFileSystemFound, onFileSystemError);
-};
-
-/**
- * We're an Entry subclass that is able to FORWARD and LIST.
- */
-wam.jsfs.dom.FileSystem.prototype =
-    wam.jsfs.Entry.subclass(['FORWARD', 'LIST']);
-
-/**
- * Return a wam 'stat' value for the FileSystem itself.
- *
- * This is a jsfs.Entry method needed as part of the 'LIST' action.
- */
-wam.jsfs.dom.FileSystem.prototype.getStat = function(onSuccess, onError) {
-  wam.async(onSuccess,
-            [null,
-             { abilities: this.abilities,
-               state: this.readyBinding.readyState,
-               capacity: this.capacity_,
-               source: 'domfs'
-             }]);
-};
-
-/**
- * If this FileSystem isn't ready, try to make it ready and queue the callback
- * for later, otherwise call it right now.
- *
- * @param {function()} callback The function to invoke when the file system
- *   becomes ready.
- * @param {function(wam.Error)} onError The function to invoke if the
- *   file system fails to become ready.
- */
-wam.jsfs.dom.FileSystem.prototype.doOrQueue_ = function(callback, onError) {
-  if (this.readyBinding.isReadyState('READY')) {
-    callback();
-  } else {
-    this.connect(callback, onError);
-  }
-};
-
-/**
- * Utility method converts a DOM FileError and a path into an appropriate
- * 'wam.FileSystem.Error' value and passes it to the given onError function.
- *
- * The signature for this method is backwards because it's typically used
- * in conjunction with onFileError_.bind(this, onError, path), where the final
- * error parameter will be supplied later.
- *
- * @param {function(wam.Error)} onError The function to invoke with the
- *   converted error.
- * @param {string} path The path associated with the with the error.
- * @param {FileError} The DOM FileError to convert.
- */
-wam.jsfs.dom.FileSystem.prototype.onFileError_ = function(
-    onError, path, error) {
-  onError(wam.jsfs.dom.convertFileError(error, path));
-};
-
-/**
- * Same as ..onFileError_, except used when reporting an error about a DirEntry.
- */
-wam.jsfs.dom.FileSystem.prototype.onDirError_ = function(
-    onError, path, error) {
-  onError(wam.jsfs.dom.convertDirError(error, path));
-};
-
-/**
- * Forward a stat call to the LocalFileSystem.
- *
- * This is a jsfs.Entry method needed as part of the 'FORWARD' action.
- */
-wam.jsfs.dom.FileSystem.prototype.forwardStat = function(
-    arg, onSuccess, onError) {
-  var onFileFound = function(entry) {
-    wam.jsfs.dom.statEntry(
-        entry, onSuccess,
-        this.onFileError_.bind(this, onError, arg.forwardPath));
-  }.bind(this);
-
-  var onDirFound = function(entry) {
-    wam.jsfs.dom.statEntry(
-        entry, onSuccess,
-        this.onDirError_.bind(this, onError, arg.forwardPath));
-  }.bind(this);
-
-  var onFileResolveError = function(error) {
-    if (error.name == 'TypeMismatchError') {
-      this.domfs_.root.getDirectory(
-          arg.path, {create: false},
-          onDirFound,
-          this.onDirError_.bind(this, onError, arg.forwardPath));
-    } else {
-      this.onFileError_(onError, arg.forwardPath, error);
-    }
-  }.bind(this);
-
-  var stat = function() {
-    this.domfs_.root.getFile(arg.forwardPath, {create: false},
-                             onFileFound, onFileResolveError);
-  }.bind(this);
-
-  this.doOrQueue_(stat, onError);
-};
-
-/**
- * Forward an unlink call to the LocalFileSystem.
- *
- * This is a jsfs.Entry method needed as part of the 'FORWARD' action.
- */
-wam.jsfs.dom.FileSystem.prototype.forwardUnlink = function(
-    arg, onSuccess, onError) {
-  var onFileFound = function(entry) {
-    entry.remove(
-        onSuccess,
-        this.onFileError_.bind(this, onError, arg.forwardPath));
-  }.bind(this);
-
-  var onDirFound = function(entry) {
-    entry.removeRecursively(
-        onSuccess,
-        this.onDirError_.bind(this, onError, arg.forwardPath));
-  }.bind(this);
-
-  var onFileResolveError = function(error) {
-    if (error.name == 'TypeMismatchError') {
-      this.domfs_.root.getDirectory(
-          arg.path, {create: false},
-          onDirFound,
-          this.onDirError_.bind(this, onError, arg.forwardPath));
-    } else {
-      this.onFileError_(onError, arg.forwardPath, error);
-    }
-  }.bind(this);
-
-  this.doOrQueue_(function() {
-      this.domfs_.root.getFile(arg.forwardPath, {create: false},
-                               onFileFound, onFileResolveError);
-    }.bind(this),
-    onError);
-};
-
-/**
- * Forward a list call to the LocalFileSystem.
- *
- * This is a jsfs.Entry method needed as part of the 'FORWARD' action.
- */
-wam.jsfs.dom.FileSystem.prototype.forwardList = function(
-    arg, onSuccess, onError) {
-  // List of Entry object we'll need to stat.
-  var entries = [];
-  // Number of Entry objects we've got metadata results for so far.
-  var mdgot = 0;
-  // The wam 'list' result.
-  var rv = {};
-
-  // Called once per entry to deliver the successful stat result.
-  var onStat = function(name, stat) {
-    rv[name] = {stat: stat};
-    if (++mdgot == entries.length)
-      onSuccess(rv);
-  };
-
-  // DirEntry.readEntries callback.
-  var onReadEntries = function(reader, results) {
-    if (!results.length) {
-      // If we're called back with no results it means we're done.
-      if (!entries.length) {
-        onSuccess(rv);
-        return;
-      }
-
-      for (var i = 0; i < entries.length; i++) {
-        wam.jsfs.dom.statEntry(
-            entries[i],
-            onStat.bind(null, entries[i].name),
-            this.onFileError_.bind(this, onError,
-                                   arg.forwardPath + '/' + entries[i]));
-      }
-    } else {
-      entries = entries.concat(results);
-      reader.readEntries(onReadEntries.bind(null, reader));
-    }
-  }.bind(this);
-
-  // Delivers the DirEntry for the target directory.
-  var onDirectoryFound = function(dirEntry) {
-    var reader = dirEntry.createReader();
-    reader.readEntries(onReadEntries.bind(null, reader));
-  };
-
-  this.doOrQueue_(function() {
-      this.domfs_.root.getDirectory(
-          arg.forwardPath, {create: false},
-          onDirectoryFound,
-          this.onDirError_.bind(this, onError, arg.forwardPath));
-    }.bind(this),
-    onError);
-};
-
-/**
- * Forward a wam 'execute' to this file system.
- *
- * Executables are not supported on the DOM file system.
- *
- * This is a jsfs.Entry method needed as part of the 'FORWARD' action.
- *
- * TODO(rginda): We could add support for running nmf files, or wash
- * scripts, or even respect shebangs for shell scripts.  Maybe?
- */
-wam.jsfs.dom.FileSystem.prototype.forwardExecute = function(arg) {
-  arg.executeContext.closeError('wam.FileSystem.Error.NotExecutable', []);
-};
-
-/**
- * Forward a wam 'open' to this file system.
- *
- * This is a jsfs.Entry method needed as part of the 'FORWARD' action.
- */
-wam.jsfs.dom.FileSystem.prototype.forwardOpen = function(arg) {
-  this.doOrQueue_(function() {
-      arg.openContext.path = arg.forwardPath;
-      var domoc = new wam.jsfs.dom.OpenContext(this.domfs_, arg.openContext);
-      domoc.onOpen_({path: arg.forwardPath, arg: arg.arg});
-    }.bind(this),
-    function(value) { arg.openContext.closeError(value) });
-};
-
-/**
- * Drain with success any pending doOrQueue_'s when we become ready.
- */
-wam.jsfs.dom.FileSystem.prototype.onBindingReady_ = function() {
-  while (this.pendingOperations_.length) {
-    var onSuccess = this.pendingOperations_.shift()[0];
-    onSuccess();
-  }
-};
-
-/**
- * Drain with error any pending doOrQueue_'s if we close due to an error.
- */
-wam.jsfs.dom.FileSystem.prototype.onBindingClose_ = function(reason, value) {
-  if (reason == 'error') {
-    while (this.pendingOperations_.length) {
-      var onError = this.pendingOperations_.shift()[1];
-      onError();
-    }
-  }
-};
-// SOURCE FILE: wam/js/wam_jsfs_dom_open_context.js
-// Copyright (c) 2014 The Chromium OS Authors. All rights reserved.
-// Use of this source code is governed by a BSD-style license that can be
-// found in the LICENSE file.
-
-'use strict';
-
-/**
- * An object that connects a wam.binding.fs.OpenContext to an open file on a
- * DOM LocalFileSystem.
- */
-wam.jsfs.dom.OpenContext = function(domfs, openContextBinding) {
-  // Raw DOM LocalFileSystem instance, not the wam.jsfs.dom.FileSystem.
-  this.domfs_ = domfs;
-
-  // The current read/write position.
-  this.position_ = 0;
-  // The DOM FileEntry we're operating on.
-  this.entry_ = null;
-  // The DOM File we're operating on.
-  this.file_ = null;
-
-  /**
-   * The wam.binding.fs.OpenContext we're working for.
-   */
-  this.openContextBinding = openContextBinding;
-  openContextBinding.onSeek.addListener(this.onSeek_, this);
-  openContextBinding.onRead.addListener(this.onRead_, this);
-  openContextBinding.onWrite.addListener(this.onWrite_, this);
-
-  /**
-   * The path we were opened for.
-   */
-  this.path = openContextBinding.path;
-};
-
-/**
- * Utility function to perform a seek (update this.position_).
- *
- * Invokes onError with a wam.FileSystem.Error value and returns false on
- * error.
- *
- * If the arg object does not have a 'whence' property, this call succeeds
- * with no side effects.
- *
- * @param {Object} arg An object containing 'whence' and 'offset' arguments
- *  describing the seek operation.
- */
-wam.jsfs.dom.OpenContext.prototype.seek_ = function(arg, onError) {
-  var fileSize = this.file_.size;
-  var start = this.position_;
-
-  if (!arg.whence)
-    return true;
-
-  if (arg.whence == 'begin') {
-    start = arg.offset;
-
-  } else if (arg.whence == 'current') {
-    start += arg.offset;
-
-  } else if (arg.whence == 'end') {
-    start = fileSize + arg.offset;
-  }
-
-  if (start > fileSize) {
-    onError(wam.mkerr('wam.FileSystem.Error.EndOfFile', []));
-    return false;
-  }
-
-  if (start < 0) {
-    onError(wam.mkerr('wam.FileSystem.Error.BeginningOfFile', []));
-    return false;
-  }
-
-  this.position_ = start;
-  return true;
-};
-
-/**
- * Convenience method to close out this context with a wam.Error value.
- */
-wam.jsfs.dom.OpenContext.prototype.onWamError_ = function(wamError) {
-  this.openContextBinding.closeErrorValue(wamError);
-};
-
-/**
- * Convenience method to convert a FileError to a wam.FileSystem.Error value
- * close this context with it.
- *
- * Used in the context of a FileEntry.
- */
-wam.jsfs.dom.OpenContext.prototype.onFileError_ = function(error) {
-  this.onWamError_(wam.jsfs.dom.convertFileError(error, this.path));
-};
-
-/**
- * Convenience method to convert a FileError to a wam.FileSystem.Error value
- * close this context with it.
- *
- * Used in the context of a DirEntry.
- */
-wam.jsfs.dom.OpenContext.prototype.onDirError_ = function(error) {
-  this.onWamError_(wam.jsfs.dom.convertDirError(error, this.path));
-};
-
-/**
- * Called directly by the parent wam.jsfs.dom.FileSystem to initate the
- * open.
- */
-wam.jsfs.dom.OpenContext.prototype.onOpen_ = function() {
-  var onFileError = this.onFileError_.bind(this);
-  var mode = this.openContextBinding.mode;
-
-  var onStat = function(stat) {
-    this.entry_.file(function(f) {
-        this.file_ = f;
-        this.openContextBinding.ready(stat);
-      }.bind(this),
-      onFileError);
-  }.bind(this);
-
-  var onFileFound = function(entry) {
-    this.entry_ = entry;
-    if (mode.write && mode.truncate) {
-      this.entry_.createWriter(
-          function(writer) {
-            writer.truncate(0);
-            wam.jsfs.dom.statEntry(entry, onStat, onFileError);
-          },
-          onFileError);
-    } else {
-      wam.jsfs.dom.statEntry(entry, onStat, onFileError);
-    }
-  }.bind(this);
-
-  this.domfs_.root.getFile(
-      this.path,
-      {create: mode.create,
-       exclusive: mode.exclusive
-      },
-      onFileFound, onFileError);
-};
-
-/**
- * Handle a seek event from the binding.
- */
-wam.jsfs.dom.OpenContext.prototype.onSeek_ = function(arg, onSuccess, onError) {
-  if (!this.seek_(arg, onError))
-    return;
-
-  onSuccess({position: this.position_});
-};
-
-/**
- * Handle a read event from the binding.
- */
-wam.jsfs.dom.OpenContext.prototype.onRead_ = function(arg, onSuccess, onError) {
-  if (!this.seek_(arg, onError))
-    return;
-
-  var fileSize = this.file_.size;
-  var end;
-  if (arg.count) {
-    end = this.position_ + count;
-  } else {
-    end = fileSize;
-  }
-
-  var dataType = arg.dataType || 'utf8-string';
-  var reader = new FileReader(this.entry_.file);
-
-  reader.onload = function(e) {
-    this.position_ = end + 1;
-    var data = reader.result;
-
-    if (dataType == 'base64-string') {
-      // TODO: By the time we read this into a string the data may already have
-      // been munged.  We need an ArrayBuffer->Base64 string implementation to
-      // make this work for real.
-      data = btoa(data);
-    }
-
-    onSuccess({dataType: dataType, data: data});
-  }.bind(this);
-
-  reader.onerror = function(error) {
-    onError(wam.jsfs.dom.convertFileError(error, this.path));
-  };
-
-  var slice = this.file_.slice(this.position_, end);
-  if (dataType == 'blob') {
-    onSuccess({dataType: dataType, data: slice});
-  } else if (dataType == 'arraybuffer') {
-    reader.readAsArrayBuffer(slice);
-  } else {
-    reader.readAsText(slice);
-  }
-};
-
-/**
- * Handle a write event from the binding.
- */
-wam.jsfs.dom.OpenContext.prototype.onWrite_ = function(
-    arg, onSuccess, onError) {
-  if (!this.seek_(arg, onError))
-    return;
-
-  var onWriterReady = function(writer) {
-    var blob;
-    if (arg.data instanceof Blob) {
-      blob = arg.data;
-    } else if (arg.data instanceof ArrayBuffer) {
-      blob = new Blob([arg.data], {type: 'application/octet-stream'});
-    } else if (arg.dataType == 'base64-string') {
-      // TODO: Once we turn this into a string the data may already have
-      // been munged.  We need an ArrayBuffer->Base64 string implementation to
-      // make this work for real.
-      blob = new Blob([atob(arg.data)],  {type: 'application/octet-stream'});
-    } else if (arg.dataType == 'utf8-string') {
-      blob = new Blob([arg.data],  {type: 'text/plain'});
-    } else if (arg.dataType == 'value') {
-      blob = new Blob([JSON.stringify(arg.data)],  {type: 'text/json'});
-    }
-
-    writer.onerror = function(error) {
-      onError(wam.jsfs.dom.convertFileError(error, this.path));
-    }.bind(this);
-
-    writer.onwrite = function() {
-      this.position_ = this.position_ + blob.size;
-      onSuccess(null);
-    }.bind(this);
-
-    writer.seek(this.position_);
-    writer.write(blob);
-  };
-
-  this.entry_.createWriter(
-      onWriterReady,
-      this.onFileError_.bind(this),
-      function(error) {
-        onError(wam.jsfs.dom.convertFileError(error, this.path));
-      });
-};
 // SOURCE FILE: libdot/js/lib_event.js
 // Copyright (c) 2013 The Chromium OS Authors. All rights reserved.
 // Use of this source code is governed by a BSD-style license that can be
@@ -20569,11 +18437,11 @@ lib.Event = function(opt_firstCallback, opt_finalCallback) {
     if (rv === false)
       return;
 
-    ep.observers.forEach(function(ary) { ary[0].apply(ary[1], args) });
+    ep.observers.forEach((ary) => ary[0].apply(ary[1], args));
 
     if (opt_finalCallback)
       opt_finalCallback.apply(null, args);
-  }
+  };
 
   /**
    * Add a callback function.
@@ -20623,11 +18491,6 @@ lib.rtdep('lib.f.getStack');
  */
 lib.fs = {};
 
-if (window && typeof window.addEventListener == 'function') {
-  window.addEventListener('load',
-                          function() { lib.fs.installFileErrorToString() });
-}
-
 /**
  * Returns a function that console.log()'s its arguments, prefixed by |msg|.
  *
@@ -20673,35 +18536,6 @@ lib.fs.err = function(msg, opt_callback) {
 };
 
 /**
- * Install a sensible toString() on the FileError object.
- *
- * FileError.prototype.code is a numeric code describing the cause of the
- * error.  The FileError constructor has a named property for each possible
- * error code, but provides no way to map the code to the named property.
- * This toString() implementation fixes that.
- */
-lib.fs.installFileErrorToString = function() {
-  FileError.prototype.toString = function() {
-    return '[object FileError: ' + this.name + ']';
-  }
-};
-
-/**
- * Return a mnemonic code for a given FileError code.
- *
- * @param {integer} code A FileError code.
- * @return {string} The corresponding mnemonic value.
- */
-lib.fs.getFileErrorMnemonic = function(code) {
-  for (var key in FileError) {
-    if (key.search(/_ERR$/) != -1 && FileError[key] == code)
-      return key;
-  }
-
-  return code;
-};
-
-/**
  * Overwrite a file on an HTML5 filesystem.
  *
  * Replace the contents of a file with the string provided.  If the file
@@ -20712,7 +18546,7 @@ lib.fs.getFileErrorMnemonic = function(code) {
  * @param {string} path The path of the target file, relative to root.
  * @param {Blob|string} contents The new contents of the file.
  * @param {function()} onSuccess The function to invoke after success.
- * @param {function(FileError)} opt_onError Optional function to invoke if the
+ * @param {function(DOMError)} opt_onError Optional function to invoke if the
  *     operation fails.
  */
 lib.fs.overwriteFile = function(root, path, contents, onSuccess, opt_onError) {
@@ -20754,14 +18588,14 @@ lib.fs.overwriteFile = function(root, path, contents, onSuccess, opt_onError) {
  * @param {string} path The path of the target file, relative to root.
  * @param {function(string)} onSuccess The function to invoke after
  *     success.
- * @param {function(FileError)} opt_onError Optional function to invoke if the
+ * @param {function(DOMError)} opt_onError Optional function to invoke if the
  *     operation fails.
  */
 lib.fs.readFile = function(root, path, onSuccess, opt_onError) {
   function onFileFound(fileEntry) {
     fileEntry.file(function(file) {
         var reader = new FileReader();
-        reader.onloadend = function() { onSuccess(reader.result) };
+        reader.onloadend = () => onSuccess(reader.result);
 
         reader.readAsText(file);
       }, opt_onError);
@@ -20779,7 +18613,7 @@ lib.fs.readFile = function(root, path, onSuccess, opt_onError) {
  * @param {string} path The path of the target file, relative to root.
  * @param {function(string)} opt_onSuccess Optional function to invoke after
  *     success.
- * @param {function(FileError)} opt_onError Optional function to invoke if the
+ * @param {function(DOMError)} opt_onError Optional function to invoke if the
  *     operation fails.
  */
 lib.fs.removeFile = function(root, path, opt_onSuccess, opt_onError) {
@@ -20801,7 +18635,7 @@ lib.fs.removeFile = function(root, path, opt_onSuccess, opt_onError) {
  * @param {string} path The path of the target file, relative to root.
  * @param {function(Object)} onSuccess The function to invoke after
  *     success.
- * @param {function(FileError)} opt_onError Optional function to invoke
+ * @param {function(DOMError)} opt_onError Optional function to invoke
  *     if the operation fails.
  */
 lib.fs.readDirectory = function(root, path, onSuccess, opt_onError) {
@@ -20833,7 +18667,7 @@ lib.fs.readDirectory = function(root, path, onSuccess, opt_onError) {
  * @param {string} path The path of the target file, relative to root.
  * @param {function(string)} onSuccess The function to invoke after
  *     success.
- * @param {function(FileError)} opt_onError Optional function to invoke if the
+ * @param {function(DOMError)} opt_onError Optional function to invoke if the
  *     operation fails.
  */
 lib.fs.getOrCreateFile = function(root, path, onSuccess, opt_onError) {
@@ -20852,8 +18686,10 @@ lib.fs.getOrCreateFile = function(root, path, onSuccess, opt_onError) {
     basename = path;
   }
 
-  if (!dirname)
-    return onDirFound(root);
+  if (!dirname) {
+    onDirFound(root);
+    return;
+  }
 
   lib.fs.getOrCreateDirectory(root, dirname, onDirFound, opt_onError);
 };
@@ -20866,7 +18702,7 @@ lib.fs.getOrCreateFile = function(root, path, onSuccess, opt_onError) {
  *     path.
  * @param {string} path The path of the target file, relative to root.
  * @param {function(string)} onSuccess The function to invoke after success.
- * @param {function(FileError)} opt_onError Optional function to invoke if the
+ * @param {function(DOMError)} opt_onError Optional function to invoke if the
  *     operation fails.
  */
 lib.fs.getOrCreateDirectory = function(root, path, onSuccess, opt_onError) {
@@ -20888,136 +18724,479 @@ lib.fs.getOrCreateDirectory = function(root, path, onSuccess, opt_onError) {
 
   getOrCreateNextName(root);
 };
-// SOURCE FILE: libdot/js/lib_f_sequence.js
-// Copyright (c) 2012 The Chromium OS Authors. All rights reserved.
+// SOURCE FILE: libdot/third_party/punycode/lib_punycode.js
+// Copyright 2017 The Chromium OS Authors. All rights reserved.
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+// Note: Don't modify this file between the ###AUTO### marks.  This is mostly
+// taken unmodified from the upstream.  Use bin/update-punycode to update.
+
 'use strict';
 
-lib.rtdep('lib.f.getStack');
+lib.punycode = {};
+
+(function(exports) {
+
+// ### AUTO-START ###
+
+// This is v2.1.0 from https://github.com/bestiejs/punycode.js
+
+/** Highest positive signed 32-bit float value */
+const maxInt = 2147483647; // aka. 0x7FFFFFFF or 2^31-1
+
+/** Bootstring parameters */
+const base = 36;
+const tMin = 1;
+const tMax = 26;
+const skew = 38;
+const damp = 700;
+const initialBias = 72;
+const initialN = 128; // 0x80
+const delimiter = '-'; // '\x2D'
+
+/** Regular expressions */
+const regexPunycode = /^xn--/;
+const regexNonASCII = /[^\0-\x7E]/; // non-ASCII chars
+const regexSeparators = /[\x2E\u3002\uFF0E\uFF61]/g; // RFC 3490 separators
+
+/** Error messages */
+const errors = {
+	'overflow': 'Overflow: input needs wider integers to process',
+	'not-basic': 'Illegal input >= 0x80 (not a basic code point)',
+	'invalid-input': 'Invalid input'
+};
+
+/** Convenience shortcuts */
+const baseMinusTMin = base - tMin;
+const floor = Math.floor;
+const stringFromCharCode = String.fromCharCode;
+
+/*--------------------------------------------------------------------------*/
 
 /**
- * A utility for managing sequences of asynchronous functions.
- *
- * This class takes an array of functions, and executes them in sequence.  Each
- * function must call a sequence-provided next() or error() function to advance
- * the sequence, or error out of it.
- *
- * A function that expects to perform a number of async calls can indicate how
- * many times it must call next() before the sequence advances.
- *
- * Here's an abbreviated example from wash_app.js:
- *
- *   var sequence = new lib.Sequence
- *   (this,
- *    [function filesystem(cx) {
- *       var initialDirs = [... array of strings ...];
- *       cx.expected = initialDirs.length;
- *
- *       initialDirs.forEach(function(path) {
- *         fs.link(path, new lib.wa.fs.Directory(),
- *                 cx.next, cx.error);
- *       });
- *     },
- *
- *     function commands() { ... },
- *
- *     ...
- *    ];
- *
- *   sequence.run(onSuccess, onError);
- *
- * (See the comments inside sequence.run() for details of the 'cx' object.)
- *
- * Here the 'filesystem' function must call next once for each entry in
- * initialDirs before the sequence advances to the 'commands' function.
- *
- * When the final function invokes next() the onSuccess function is called and
- * the sequence ends.  If anyone calls error() the sequence stops and the
- * onError function is called.
- *
- * @param {Object} bindObject The object to apply each sequence function to.
- * @param {Array<function(Object)>} ary The array of sequence functions.
+ * A generic error utility function.
+ * @private
+ * @param {String} type The error type.
+ * @returns {Error} Throws a `RangeError` with the applicable error message.
  */
-lib.f.Sequence = function(bindObject, ary) {
-  this.ary = ary;
-  this.bindObject = bindObject;
+function error(type) {
+	throw new RangeError(errors[type]);
+}
 
-  /**
-   * True to log the steps of the sequence to the js console.
-   */
-  this.verbose = false;
+/**
+ * A generic `Array#map` utility function.
+ * @private
+ * @param {Array} array The array to iterate over.
+ * @param {Function} callback The function that gets called for every array
+ * item.
+ * @returns {Array} A new array of values returned by the callback function.
+ */
+function map(array, fn) {
+	const result = [];
+	let length = array.length;
+	while (length--) {
+		result[length] = fn(array[length]);
+	}
+	return result;
+}
+
+/**
+ * A simple `Array#map`-like wrapper to work with domain name strings or email
+ * addresses.
+ * @private
+ * @param {String} domain The domain name or email address.
+ * @param {Function} callback The function that gets called for every
+ * character.
+ * @returns {Array} A new string of characters returned by the callback
+ * function.
+ */
+function mapDomain(string, fn) {
+	const parts = string.split('@');
+	let result = '';
+	if (parts.length > 1) {
+		// In email addresses, only the domain name should be punycoded. Leave
+		// the local part (i.e. everything up to `@`) intact.
+		result = parts[0] + '@';
+		string = parts[1];
+	}
+	// Avoid `split(regex)` for IE8 compatibility. See #17.
+	string = string.replace(regexSeparators, '\x2E');
+	const labels = string.split('.');
+	const encoded = map(labels, fn).join('.');
+	return result + encoded;
+}
+
+/**
+ * Creates an array containing the numeric code points of each Unicode
+ * character in the string. While JavaScript uses UCS-2 internally,
+ * this function will convert a pair of surrogate halves (each of which
+ * UCS-2 exposes as separate characters) into a single code point,
+ * matching UTF-16.
+ * @see `punycode.ucs2.encode`
+ * @see <https://mathiasbynens.be/notes/javascript-encoding>
+ * @memberOf punycode.ucs2
+ * @name decode
+ * @param {String} string The Unicode input string (UCS-2).
+ * @returns {Array} The new array of code points.
+ */
+function ucs2decode(string) {
+	const output = [];
+	let counter = 0;
+	const length = string.length;
+	while (counter < length) {
+		const value = string.charCodeAt(counter++);
+		if (value >= 0xD800 && value <= 0xDBFF && counter < length) {
+			// It's a high surrogate, and there is a next character.
+			const extra = string.charCodeAt(counter++);
+			if ((extra & 0xFC00) == 0xDC00) { // Low surrogate.
+				output.push(((value & 0x3FF) << 10) + (extra & 0x3FF) + 0x10000);
+			} else {
+				// It's an unmatched surrogate; only append this code unit, in case the
+				// next code unit is the high surrogate of a surrogate pair.
+				output.push(value);
+				counter--;
+			}
+		} else {
+			output.push(value);
+		}
+	}
+	return output;
+}
+
+/**
+ * Creates a string based on an array of numeric code points.
+ * @see `punycode.ucs2.decode`
+ * @memberOf punycode.ucs2
+ * @name encode
+ * @param {Array} codePoints The array of numeric code points.
+ * @returns {String} The new Unicode string (UCS-2).
+ */
+const ucs2encode = array => String.fromCodePoint(...array);
+
+/**
+ * Converts a basic code point into a digit/integer.
+ * @see `digitToBasic()`
+ * @private
+ * @param {Number} codePoint The basic numeric code point value.
+ * @returns {Number} The numeric value of a basic code point (for use in
+ * representing integers) in the range `0` to `base - 1`, or `base` if
+ * the code point does not represent a value.
+ */
+const basicToDigit = function(codePoint) {
+	if (codePoint - 0x30 < 0x0A) {
+		return codePoint - 0x16;
+	}
+	if (codePoint - 0x41 < 0x1A) {
+		return codePoint - 0x41;
+	}
+	if (codePoint - 0x61 < 0x1A) {
+		return codePoint - 0x61;
+	}
+	return base;
 };
 
 /**
- * Execute this sequence without side-effecting this sequence instance.
- *
- * You may call this method multiple times without waiting for the sequence
- * to complete.
- *
- * @param {function(Object)} onSuccess The function to invoke when the sequence
- *     ends without an error.  This is passed the same context object as the
- *     sequence functions.
- * @param {function(Object}) onError The function to invoke when the sequence
- *     ends with an error.
- * @param {*} opt_arg An optional value to include as cx.arg.
+ * Converts a digit/integer into a basic code point.
+ * @see `basicToDigit()`
+ * @private
+ * @param {Number} digit The numeric value of a basic code point.
+ * @returns {Number} The basic code point whose value (when used for
+ * representing integers) is `digit`, which needs to be in the range
+ * `0` to `base - 1`. If `flag` is non-zero, the uppercase form is
+ * used; else, the lowercase form is used. The behavior is undefined
+ * if `flag` is non-zero and `digit` has no uppercase form.
  */
-lib.f.Sequence.prototype.run = function(onSuccess, onError, opt_arg) {
-  var ary = this.ary;
-  var step = 0;
-
-  var bindObject = this.bindObject;
-
-  var cx = {
-    /**
-     * The value of opt_arg.
-     */
-    arg: opt_arg,
-
-    /**
-     * The function to call to advance the sequence.
-     *
-     * If you set cx.expected to a number, then next() must be called that
-     * many times before we advance.
-     */
-    next: function() {
-      if (--cx.expected != 0) {
-        if (this.verbose)
-          console.log('sequence: ' + ary[step].name + ': wait: ' + cx.expected);
-        return;
-      }
-
-      if (++step == ary.length) {
-        onSuccess(opt_arg);
-        return;
-      }
-
-      cx.expected = 1;
-
-      if (this.verbose)
-        console.log('sequence: ' + ary[step].name);
-      ary[step].call(bindObject, cx);
-    }.bind(this),
-
-    /**
-     * The function to call to abort the sequence.
-     *
-     * The onError handler will get any arguments you pass to this function.
-     */
-    error: function() {
-      onError.apply(null, arguments)
-    },
-
-    /**
-     * By default, cx.next only needs to be called once per step.
-     */
-    expected: 1
-  };
-
-  if (this.verbose)
-    console.log('sequence: ' + ary[0].name);
-
-  ary[0].call(bindObject, cx);
+const digitToBasic = function(digit, flag) {
+	//  0..25 map to ASCII a..z or A..Z
+	// 26..35 map to ASCII 0..9
+	return digit + 22 + 75 * (digit < 26) - ((flag != 0) << 5);
 };
+
+/**
+ * Bias adaptation function as per section 3.4 of RFC 3492.
+ * https://tools.ietf.org/html/rfc3492#section-3.4
+ * @private
+ */
+const adapt = function(delta, numPoints, firstTime) {
+	let k = 0;
+	delta = firstTime ? floor(delta / damp) : delta >> 1;
+	delta += floor(delta / numPoints);
+	for (/* no initialization */; delta > baseMinusTMin * tMax >> 1; k += base) {
+		delta = floor(delta / baseMinusTMin);
+	}
+	return floor(k + (baseMinusTMin + 1) * delta / (delta + skew));
+};
+
+/**
+ * Converts a Punycode string of ASCII-only symbols to a string of Unicode
+ * symbols.
+ * @memberOf punycode
+ * @param {String} input The Punycode string of ASCII-only symbols.
+ * @returns {String} The resulting string of Unicode symbols.
+ */
+const decode = function(input) {
+	// Don't use UCS-2.
+	const output = [];
+	const inputLength = input.length;
+	let i = 0;
+	let n = initialN;
+	let bias = initialBias;
+
+	// Handle the basic code points: let `basic` be the number of input code
+	// points before the last delimiter, or `0` if there is none, then copy
+	// the first basic code points to the output.
+
+	let basic = input.lastIndexOf(delimiter);
+	if (basic < 0) {
+		basic = 0;
+	}
+
+	for (let j = 0; j < basic; ++j) {
+		// if it's not a basic code point
+		if (input.charCodeAt(j) >= 0x80) {
+			error('not-basic');
+		}
+		output.push(input.charCodeAt(j));
+	}
+
+	// Main decoding loop: start just after the last delimiter if any basic code
+	// points were copied; start at the beginning otherwise.
+
+	for (let index = basic > 0 ? basic + 1 : 0; index < inputLength; /* no final expression */) {
+
+		// `index` is the index of the next character to be consumed.
+		// Decode a generalized variable-length integer into `delta`,
+		// which gets added to `i`. The overflow checking is easier
+		// if we increase `i` as we go, then subtract off its starting
+		// value at the end to obtain `delta`.
+		let oldi = i;
+		for (let w = 1, k = base; /* no condition */; k += base) {
+
+			if (index >= inputLength) {
+				error('invalid-input');
+			}
+
+			const digit = basicToDigit(input.charCodeAt(index++));
+
+			if (digit >= base || digit > floor((maxInt - i) / w)) {
+				error('overflow');
+			}
+
+			i += digit * w;
+			const t = k <= bias ? tMin : (k >= bias + tMax ? tMax : k - bias);
+
+			if (digit < t) {
+				break;
+			}
+
+			const baseMinusT = base - t;
+			if (w > floor(maxInt / baseMinusT)) {
+				error('overflow');
+			}
+
+			w *= baseMinusT;
+
+		}
+
+		const out = output.length + 1;
+		bias = adapt(i - oldi, out, oldi == 0);
+
+		// `i` was supposed to wrap around from `out` to `0`,
+		// incrementing `n` each time, so we'll fix that now:
+		if (floor(i / out) > maxInt - n) {
+			error('overflow');
+		}
+
+		n += floor(i / out);
+		i %= out;
+
+		// Insert `n` at position `i` of the output.
+		output.splice(i++, 0, n);
+
+	}
+
+	return String.fromCodePoint(...output);
+};
+
+/**
+ * Converts a string of Unicode symbols (e.g. a domain name label) to a
+ * Punycode string of ASCII-only symbols.
+ * @memberOf punycode
+ * @param {String} input The string of Unicode symbols.
+ * @returns {String} The resulting Punycode string of ASCII-only symbols.
+ */
+const encode = function(input) {
+	const output = [];
+
+	// Convert the input in UCS-2 to an array of Unicode code points.
+	input = ucs2decode(input);
+
+	// Cache the length.
+	let inputLength = input.length;
+
+	// Initialize the state.
+	let n = initialN;
+	let delta = 0;
+	let bias = initialBias;
+
+	// Handle the basic code points.
+	for (const currentValue of input) {
+		if (currentValue < 0x80) {
+			output.push(stringFromCharCode(currentValue));
+		}
+	}
+
+	let basicLength = output.length;
+	let handledCPCount = basicLength;
+
+	// `handledCPCount` is the number of code points that have been handled;
+	// `basicLength` is the number of basic code points.
+
+	// Finish the basic string with a delimiter unless it's empty.
+	if (basicLength) {
+		output.push(delimiter);
+	}
+
+	// Main encoding loop:
+	while (handledCPCount < inputLength) {
+
+		// All non-basic code points < n have been handled already. Find the next
+		// larger one:
+		let m = maxInt;
+		for (const currentValue of input) {
+			if (currentValue >= n && currentValue < m) {
+				m = currentValue;
+			}
+		}
+
+		// Increase `delta` enough to advance the decoder's <n,i> state to <m,0>,
+		// but guard against overflow.
+		const handledCPCountPlusOne = handledCPCount + 1;
+		if (m - n > floor((maxInt - delta) / handledCPCountPlusOne)) {
+			error('overflow');
+		}
+
+		delta += (m - n) * handledCPCountPlusOne;
+		n = m;
+
+		for (const currentValue of input) {
+			if (currentValue < n && ++delta > maxInt) {
+				error('overflow');
+			}
+			if (currentValue == n) {
+				// Represent delta as a generalized variable-length integer.
+				let q = delta;
+				for (let k = base; /* no condition */; k += base) {
+					const t = k <= bias ? tMin : (k >= bias + tMax ? tMax : k - bias);
+					if (q < t) {
+						break;
+					}
+					const qMinusT = q - t;
+					const baseMinusT = base - t;
+					output.push(
+						stringFromCharCode(digitToBasic(t + qMinusT % baseMinusT, 0))
+					);
+					q = floor(qMinusT / baseMinusT);
+				}
+
+				output.push(stringFromCharCode(digitToBasic(q, 0)));
+				bias = adapt(delta, handledCPCountPlusOne, handledCPCount == basicLength);
+				delta = 0;
+				++handledCPCount;
+			}
+		}
+
+		++delta;
+		++n;
+
+	}
+	return output.join('');
+};
+
+/**
+ * Converts a Punycode string representing a domain name or an email address
+ * to Unicode. Only the Punycoded parts of the input will be converted, i.e.
+ * it doesn't matter if you call it on a string that has already been
+ * converted to Unicode.
+ * @memberOf punycode
+ * @param {String} input The Punycoded domain name or email address to
+ * convert to Unicode.
+ * @returns {String} The Unicode representation of the given Punycode
+ * string.
+ */
+const toUnicode = function(input) {
+	return mapDomain(input, function(string) {
+		return regexPunycode.test(string)
+			? decode(string.slice(4).toLowerCase())
+			: string;
+	});
+};
+
+/**
+ * Converts a Unicode string representing a domain name or an email address to
+ * Punycode. Only the non-ASCII parts of the domain name will be converted,
+ * i.e. it doesn't matter if you call it with a domain that's already in
+ * ASCII.
+ * @memberOf punycode
+ * @param {String} input The domain name or email address to convert, as a
+ * Unicode string.
+ * @returns {String} The Punycode representation of the given domain name or
+ * email address.
+ */
+const toASCII = function(input) {
+	return mapDomain(input, function(string) {
+		return regexNonASCII.test(string)
+			? 'xn--' + encode(string)
+			: string;
+	});
+};
+
+/*--------------------------------------------------------------------------*/
+
+/** Define the public API */
+const punycode = {
+	/**
+	 * A string representing the current Punycode.js version number.
+	 * @memberOf punycode
+	 * @type String
+	 */
+	'version': '2.1.0',
+	/**
+	 * An object of methods to convert from JavaScript's internal character
+	 * representation (UCS-2) to Unicode code points, and back.
+	 * @see <https://mathiasbynens.be/notes/javascript-encoding>
+	 * @memberOf punycode
+	 * @type Object
+	 */
+	'ucs2': {
+		'decode': ucs2decode,
+		'encode': ucs2encode
+	},
+	'decode': decode,
+	'encode': encode,
+	'toASCII': toASCII,
+	'toUnicode': toUnicode
+};
+
+// ### AUTO-END ###
+
+Object.assign(exports, punycode);
+})(lib.punycode);
+lib.resource.add('nassh/release/lastver', 'text/plain',
+'0.8.36.11' +
+''
+);
+
+lib.resource.add('nassh/release/highlights', 'text/plain',
+'% The SSH command line can handle basic quoting rules (e.g. -o "Feature yes"' +
+').' +
+'% Unicode combining character processing has been overhauled.' +
+'% Unicode tables updated to 10.0.0 release.' +
+'% Use Yubikeys and other smart cards for ssh auth: https://goo.gl/3ZEU1w' +
+'% Omnibox entries now match saved profile names first.' +
+'% OpenSSH upgraded to 7.6p1 (some older features dropped).' +
+''
+);
+
 

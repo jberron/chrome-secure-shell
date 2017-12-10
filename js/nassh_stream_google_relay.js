@@ -30,9 +30,8 @@ nassh.Stream.GoogleRelay = function(fd) {
 /**
  * We are a subclass of nassh.Stream.
  */
-nassh.Stream.GoogleRelay.prototype = {
-  __proto__: nassh.Stream.prototype
-};
+nassh.Stream.GoogleRelay.prototype = Object.create(nassh.Stream.prototype);
+nassh.Stream.GoogleRelay.constructor = nassh.Stream.GoogleRelay;
 
 /**
  * Open a relay socket.
@@ -45,25 +44,24 @@ nassh.Stream.GoogleRelay.prototype.asyncOpen_ = function(args, onComplete) {
   this.host_ = args.host;
   this.port_ = args.port;
 
-  var self = this;
   var sessionRequest = new XMLHttpRequest();
 
-  function onError() {
+  var onError = () => {
     console.error('Failed to get session id:', sessionRequest);
     onComplete(false);
-  }
+  };
 
-  function onReady() {
+  var onReady = () => {
     if (sessionRequest.readyState != XMLHttpRequest.DONE)
       return;
 
     if (sessionRequest.status != 200)
       return onError();
 
-    self.sessionID_ = this.responseText;
-    self.resumeRead_();
+    this.sessionID_ = sessionRequest.responseText;
+    this.resumeRead_();
     onComplete(true);
-  }
+  };
 
   sessionRequest.open('GET', this.relay_.relayServer +
                       'proxy?host=' + this.host_ + '&port=' + this.port_,
@@ -98,15 +96,6 @@ nassh.Stream.GoogleRelay.prototype.asyncWrite = function(data, onSuccess) {
  */
 nassh.Stream.GoogleRelay.prototype.sendWrite_ = function() {
   throw nassh.Stream.ERR_NOT_IMPLEMENTED;
-};
-
-/**
- * The asyncRead method is a no-op for this class.
- *
- * Instead we push data to the client using the onDataAvailable event.
- */
-nassh.Stream.GoogleRelay.prototype.asyncRead = function(size, onRead) {
-  setTimeout(function() { onRead('') }, 0);
 };
 
 /**
@@ -199,9 +188,9 @@ nassh.Stream.GoogleRelayXHR = function(fd) {
 /**
  * We are a subclass of nassh.Stream.GoogleRelay.
  */
-nassh.Stream.GoogleRelayXHR.prototype = {
-  __proto__: nassh.Stream.GoogleRelay.prototype
-};
+nassh.Stream.GoogleRelayXHR.prototype =
+    Object.create(nassh.Stream.GoogleRelay.prototype);
+nassh.Stream.GoogleRelayXHR.constructor = nassh.Stream.GoogleRelayXHR;
 
 /**
  * Maximum length of message that can be sent to avoid request limits.
@@ -376,9 +365,9 @@ nassh.Stream.GoogleRelayWS = function(fd) {
 /**
  * We are a subclass of nassh.Stream.GoogleRelay.
  */
-nassh.Stream.GoogleRelayWS.prototype = {
-  __proto__: nassh.Stream.GoogleRelay.prototype
-};
+nassh.Stream.GoogleRelayWS.prototype =
+    Object.create(nassh.Stream.GoogleRelay.prototype);
+nassh.Stream.GoogleRelayWS.constructor = nassh.Stream.GoogleRelayWS;
 
 /**
  * Maximum length of message that can be sent to avoid request limits.
@@ -423,7 +412,7 @@ nassh.Stream.GoogleRelayWS.prototype.recordAckTime_ = function(deltaTime) {
   this.ackTimesIndex_ = (this.ackTimesIndex_ + 1) % this.ackTimes_.length;
 
   if (this.ackTimesIndex_ == 0) {
-    // Filled the cicular buffer; compute average.
+    // Filled the circular buffer; compute average.
     var average = 0;
     for (var i = 0; i < this.ackTimes_.length; ++i)
       average += this.ackTimes_[i];
@@ -443,10 +432,7 @@ nassh.Stream.GoogleRelayWS.prototype.onSocketData_ = function(e) {
     return;
 
   var u8 = new Uint8Array(e.data);
-  var ack = (u8[0] << 24) |
-            (u8[1] << 16) |
-            (u8[2] <<  8) |
-            (u8[3] <<  0);
+  var ack = lib.array.arrayBigEndianToUint32(u8);
 
   // Acks are unsigned 24 bits. Negative means error.
   if (ack < 0) {
