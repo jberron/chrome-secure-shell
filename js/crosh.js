@@ -178,7 +178,7 @@ function StartCustom() {
     let outputLines = window.outputText.replace(/\r/g, "").split("\n");
     let chroots = outputLines[3].split(" "); // "chroot1 chroot2" -> ["chroot1", "chroot2"]
     RefreshUI(chroots);
-  }, 1000);
+  }, 500);
 }
 
 function RefreshUI(chroots) {
