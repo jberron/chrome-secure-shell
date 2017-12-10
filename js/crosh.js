@@ -184,11 +184,15 @@ function StartCustom() {
 function RefreshUI(chroots) {
   var toolbar = document.createElement("div");
   toolbar.id = "toolbar";
+  Object.assign(toolbar.style, {position: "absolute", left: 0, top: 0, right: 0});
   toolbar.style.height = "30px";
   toolbar.style.backgroundColor = "rgba(255,255,255,.3)";
-  document.querySelector("iframe").contentDocument.querySelector("x-screen").prepend(toolbar);
+  //document.querySelector("iframe").contentDocument.body.prepend(toolbar);
+  document.querySelector("#terminal").prepend(toolbar);
 
-  document.querySelector("iframe").contentDocument.getElementById("hterm:row-nodes").style.top = "36px";
+  //document.querySelector("iframe").contentDocument.getElementById("hterm:row-nodes").style.marginTop = "30px";
+  document.querySelector("iframe").style.top = "30px";
+  document.querySelector("iframe").style.height = "calc(100% - 30px)";
 
   for (let chroot of chroots) {
     var button = document.createElement("button");
