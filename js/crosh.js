@@ -200,12 +200,26 @@ function RefreshUI(chroots) {
     button.onclick = ()=> {
       //Type("sudo enter-chroot -n " + chroot + "\r");
       // we don't know what target the chroot has, so just try all three
-      Type("sudo starte17 -n " + chroot + "\r");
+      Type("sudo startunity -X xiwi -n " + chroot + "\r");
       Type("sudo startkde -n " + chroot + "\r");
       Type("sudo startxfce4 -n " + chroot + "\r");
     };
     toolbar.appendChild(button);
   }
+var button = document.createElement("button");
+button.innerText = "STEAM";
+button.onclick = ()=> {
+     Type("sudo startxiwi -T steam \r");
+};
+toolbar.appendChild(button);
+
+var button = document.createElement("button");
+button.innerText = "LibreOffice";
+button.onclick = ()=> { 
+     Type("sudo startxiwi -T libreoffice \r");
+};
+toolbar.appendChild(button);
+
 }
 
 Crosh.prototype.onBeforeUnload_ = function(e) {
